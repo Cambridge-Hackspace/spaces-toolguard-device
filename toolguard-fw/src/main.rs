@@ -254,12 +254,8 @@ fn main() -> anyhow::Result<()> {
         updates,
     ) {
         Ok(online) => online,
-        Err(e) => {
-            light.set(Status::Failed);
-            log::error!("{e:#}");
-            std::thread::sleep(Duration::from_secs(30));
-            esp_idf_svc::hal::reset::restart();
-        }
+        // No panel yet: it is started after boot, so this is the light alone.
+        Err(e) => give_up(&e, &light, None),
     };
 
     let tool_id = online
@@ -296,13 +292,8 @@ fn main() -> anyhow::Result<()> {
                 // entire function of the device missing, so this is terminal —
                 // and it says so ON the panel, which is where a member
                 // standing there will look.
-                log::error!("{e:#}");
-                if let Some(p) = panel.as_mut() {
-                    let _ = p.show(&Screen::new("Reader fault", "see /log"));
-                }
-                light.set(Status::Failed);
-                std::thread::sleep(Duration::from_secs(30));
-                esp_idf_svc::hal::reset::restart();
+                let fault = Screen::new("Reader fault", "see /log");
+                give_up(&e, &light, panel.as_mut().map(|p| (p, fault)));
             }
         }
     } else {
@@ -359,7 +350,17 @@ fn main() -> anyhow::Result<()> {
     // --- the loop -----------------------------------------------------------
     let mut reader = Reader::new(settings.config.clone());
     let (tx, rx) = mpsc::channel::<broker::Event>();
-    let client = broker::connect(&online, tx)?;
+    // Fatal like the others, and not a `?`: returning from `main` ends the
+    // program but not the board, which would stay on the network serving
+    // updates with nothing reading cards and nothing saying why. The usual
+    // cause is a broker address the client cannot parse.
+    let client = match broker::connect(&online, tx) {
+        Ok(client) => client,
+        Err(e) => {
+            let fault = Screen::new("Broker failed", "see /log");
+            give_up(&e, &light, panel.as_mut().map(|p| (p, fault)))
+        }
+    };
 
     let started = Instant::now();
     let now = || started.elapsed().as_millis() as u64;
@@ -539,6 +540,27 @@ impl Shell<'_> {
             }
         }
     }
+}
+
+/// Give up on this boot: say why, in the log and on the panel if there is one,
+/// show the failure on the status light, and start again in thirty seconds.
+///
+/// Every failure the box cannot run without comes here, so that none of them
+/// leaves it up and doing nothing. The wait keeps a box that fails at every
+/// boot from restarting so fast that nobody can read the panel, or reach
+/// `/log`, in between.
+fn give_up(
+    why: &anyhow::Error,
+    light: &StatusLight,
+    panel: Option<(&mut lcd::Panel<'_>, Screen)>,
+) -> ! {
+    log::error!("{why:#}");
+    if let Some((p, screen)) = panel {
+        let _ = p.show(&screen);
+    }
+    light.set(Status::Failed);
+    std::thread::sleep(Duration::from_secs(30));
+    esp_idf_svc::hal::reset::restart()
 }
 
 /// What the core is told about the network.
