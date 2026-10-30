@@ -237,7 +237,7 @@ fn main() -> anyhow::Result<()> {
     // declares what it can do, and an administrator may then bind it to a tool
     // in a role it declared. Claiming `power` with nothing wired to a relay is
     // how a box with no relay becomes what a machine's safety rests on.
-    let mut settings = settings::Settings::read(&Store::new(nvs.clone()));
+    let mut settings = settings::read(&Store::new(nvs.clone()));
     let roles = settings.roles();
     log::info!("this device: {}", settings.describe());
     log::info!("registering as {roles:?}");

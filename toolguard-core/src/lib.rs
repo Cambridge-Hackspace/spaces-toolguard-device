@@ -26,10 +26,12 @@
 pub mod button;
 pub mod reader;
 pub mod screen;
+pub mod settings;
 
 pub use button::StopButton;
 pub use reader::{Action, Reader};
 pub use screen::{Health, Screen};
+pub use settings::Settings;
 
 // Re-exported so a firmware configures its device without naming two crates:
 // the roles are the configuration, and `Config` is where they live.
