@@ -179,3 +179,57 @@ fn every_key_fits_the_store() {
         assert!(k.len() <= 15, "{k} is {} characters", k.len());
     }
 }
+
+// ------------------------------- what the platform has, against the settings
+
+use toolguard_core::settings::{check_roles, roles_record, RolesCheck};
+
+#[test]
+fn the_same_roles_in_any_order_are_the_same() {
+    assert_eq!(roles_record(&["reader", "power"]), "power,reader");
+    assert_eq!(roles_record(&["power", "reader"]), "power,reader");
+    assert_eq!(
+        check_roles(Some("power,reader"), &["reader", "power"]),
+        RolesCheck::Same
+    );
+    // A record in another order, or with stray spaces, still matches.
+    assert_eq!(
+        check_roles(Some(" reader , power"), &["power", "reader"]),
+        RolesCheck::Same
+    );
+}
+
+#[test]
+fn turning_a_role_on_after_registration_is_a_change() {
+    // The example in #6: a reader that is now told it switches the tool. The
+    // platform still has it as a reader, so it can never be leased.
+    let registered = roles_record(&with(&[]).roles());
+    let now = with(&[(key::GATES_POWER, "yes")]).roles();
+    assert_eq!(
+        check_roles(Some(&registered), &now),
+        RolesCheck::Changed {
+            registered: "reader".into(),
+            now: "power,reader".into(),
+        }
+    );
+}
+
+#[test]
+fn turning_a_role_off_is_a_change_too() {
+    assert!(matches!(
+        check_roles(Some("power,reader,sensor"), &["reader", "power"]),
+        RolesCheck::Changed { .. }
+    ));
+}
+
+#[test]
+fn a_box_registered_before_the_record_existed_is_unknown_not_a_change() {
+    // An upgraded box: nothing stored. Calling that a change would put every
+    // deployed box's panel into a warning at its first boot on this firmware.
+    assert_eq!(check_roles(None, &["reader"]), RolesCheck::Unknown);
+}
+
+#[test]
+fn the_record_key_fits_the_store() {
+    assert!(key::REG_ROLES.len() <= 15);
+}

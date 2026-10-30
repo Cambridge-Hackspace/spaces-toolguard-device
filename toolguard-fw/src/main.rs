@@ -239,6 +239,10 @@ fn main() -> anyhow::Result<()> {
     // how a box with no relay becomes what a machine's safety rests on.
     let mut settings = settings::read(&Store::new(nvs.clone()));
     let roles = settings.roles();
+    // Before boot, because boot registers a device that is not yet registered,
+    // and after it there is no telling whether the roles just went to the
+    // platform or went years ago.
+    let was_registered = Store::new(nvs.clone()).credentials().is_some();
     log::info!("this device: {}", settings.describe());
     log::info!("registering as {roles:?}");
 
@@ -267,6 +271,7 @@ fn main() -> anyhow::Result<()> {
         .to_string();
     settings.config.device_id = online.credentials.device_id.clone();
     settings.config.tool_id = tool_id.clone();
+    let roles_notice = roles_check(&online.store, &roles, was_registered);
 
     // --- the two peripherals ------------------------------------------------
     //
@@ -397,6 +402,7 @@ fn main() -> anyhow::Result<()> {
     // heartbeats -- the power report and the alive pulse -- which are what
     // credit this device with being alive on the local broker.
     shell.apply(reader.start(now()));
+    shell.apply(reader.notice(roles_notice, now()));
     shell.apply(reader.health(health(&address, wifi_up, broker_up), now()));
 
     loop {
@@ -581,6 +587,47 @@ fn give_up(
     light.set(Status::Failed);
     std::thread::sleep(Duration::from_secs(30));
     esp_idf_svc::hal::reset::restart()
+}
+
+/// Whether the platform has the roles this box now claims, recording them
+/// whenever they are known to have just been sent. A notice for the panel if
+/// not.
+///
+/// A device registers once, and a registered one never sends its roles again,
+/// so a setting changed afterwards changes what the box does and not what the
+/// platform thinks it is. Nothing here can fix that; it can only say so.
+fn roles_check(store: &Store, roles: &[&str], was_registered: bool) -> Option<&'static str> {
+    use toolguard_core::settings::{check_roles, key, roles_record, RolesCheck};
+    let record = |what: &str| {
+        if let Err(e) = store.set(key::REG_ROLES, &roles_record(roles)) {
+            log::warn!("could not record the roles {what}: {e:#}");
+        }
+    };
+    if !was_registered {
+        // Registered on this boot, with exactly these.
+        record("just registered with");
+        return None;
+    }
+    match check_roles(store.get(key::REG_ROLES).as_deref(), roles) {
+        RolesCheck::Same => None,
+        RolesCheck::Unknown => {
+            log::info!(
+                "registered before roles were recorded; assuming the platform has {roles:?}"
+            );
+            record("assumed");
+            None
+        }
+        RolesCheck::Changed { registered, now } => {
+            log::warn!(
+                "ROLES CHANGED since registration: the platform has [{registered}], the \
+                 settings now claim [{now}]. A registered device does not send its roles \
+                 again, so it cannot be bound in the new ones. Change the settings back, \
+                 or erase this board's settings and register it again with a new invite \
+                 (docs/INSTALLING.md §6)"
+            );
+            Some("Roles changed")
+        }
+    }
 }
 
 /// What the core is told about the network.

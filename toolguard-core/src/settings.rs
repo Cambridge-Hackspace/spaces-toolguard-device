@@ -40,6 +40,9 @@ pub mod key {
     pub const REPORTS_USAGE: &str = "report_usage";
     pub const LEASE_WAIT_S: &str = "lease_wait_s";
     pub const DRIVES_LATCH: &str = "drives_latch";
+    /// The roles the device registered with, as [`super::roles_record`]
+    /// writes them. Written by the firmware, never typed by a person.
+    pub const REG_ROLES: &str = "reg_roles";
 }
 
 /// How this box is configured, read once at boot.
@@ -211,4 +214,52 @@ impl Reading<'_> {
 /// Saturating, where `as` would wrap: a huge hold must not become a small one.
 fn clamp_u32(n: u64) -> u32 {
     u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+/// Roles as stored: sorted and comma-separated, so the order a combination
+/// was claimed in does not make it a different one.
+pub fn roles_record(roles: &[&str]) -> String {
+    let mut sorted: Vec<&str> = roles.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    sorted.join(",")
+}
+
+/// What the settings claim, against what the device registered with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RolesCheck {
+    /// The platform has the roles the settings claim.
+    Same,
+    /// The settings were changed after registration. The platform still has
+    /// `registered`, and only registering again would tell it otherwise: a box
+    /// that now claims `power` cannot be bound in it, and is never leased.
+    Changed { registered: String, now: String },
+    /// Nothing was stored: a box registered before this check existed. What
+    /// it registered with cannot be known, so the firmware records the
+    /// current roles from here on and says it assumed them.
+    Unknown,
+}
+
+/// Compare the stored record (`None` if there is none) with the roles the
+/// settings now claim.
+pub fn check_roles(registered: Option<&str>, now: &[&str]) -> RolesCheck {
+    let now = roles_record(now);
+    match registered {
+        None => RolesCheck::Unknown,
+        Some(r) => {
+            // Read back through the same normalization, so a record written
+            // by hand or by an older build in another order still matches.
+            let registered = roles_record(
+                &r.split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>(),
+            );
+            if registered == now {
+                RolesCheck::Same
+            } else {
+                RolesCheck::Changed { registered, now }
+            }
+        }
+    }
 }

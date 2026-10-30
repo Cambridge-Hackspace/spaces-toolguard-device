@@ -103,6 +103,13 @@ pub fn idle(health: &Health) -> Screen {
     }
 }
 
+/// The resting screen with something the box needs somebody to know, in place
+/// of the clock: still taking cards, but not configured as the platform has
+/// it. The detail is in the log.
+pub fn idle_with_notice(notice: &str) -> Screen {
+    Screen::new("Present card", notice)
+}
+
 /// The screen while the edge is being asked about a card.
 pub fn asking() -> Screen {
     Screen::new("Checking card", "please wait")

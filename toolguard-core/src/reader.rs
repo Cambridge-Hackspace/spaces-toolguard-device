@@ -94,6 +94,9 @@ pub struct Reader {
     tool_on: bool,
     /// What [`Action::InSession`] last said.
     in_session: bool,
+    /// Shown on the resting screen in place of the clock; see
+    /// [`Reader::notice`].
+    notice: Option<String>,
 }
 
 impl Reader {
@@ -106,6 +109,7 @@ impl Reader {
             last_card: None,
             tool_on: false,
             in_session: false,
+            notice: None,
         }
     }
 
@@ -145,6 +149,17 @@ impl Reader {
     /// Tell the reader what the shell knows about the network.
     pub fn health(&mut self, health: Health, now: u64) -> Vec<Action> {
         self.health = health;
+        let mut out = Vec::new();
+        self.refresh(now, &mut out);
+        out
+    }
+
+    /// Something the box needs somebody to know while it otherwise works --
+    /// that its roles changed after registration, say -- for the resting
+    /// screen, or `None` to clear it. Sixteen columns: the reason belongs in
+    /// the log.
+    pub fn notice(&mut self, notice: Option<&str>, now: u64) -> Vec<Action> {
+        self.notice = notice.map(str::to_string);
         let mut out = Vec::new();
         self.refresh(now, &mut out);
         out
@@ -303,7 +318,10 @@ impl Reader {
             ),
             Activity::Idle => {
                 if self.health.ready() {
-                    screen::idle(&self.health)
+                    match &self.notice {
+                        Some(notice) => screen::idle_with_notice(notice),
+                        None => screen::idle(&self.health),
+                    }
                 } else {
                     screen::diagnostics(&self.health)
                 }

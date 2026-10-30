@@ -463,6 +463,23 @@ the roles it actually claims:
 | reader + drives a latch | `reader`, `strike` — a door box |
 | reader + switches + drives a latch | `reader`, `power`, `strike` — a room in one box |
 
+**The roles are sent once, when the box registers, and never again.** Turning
+"Has a card reader", "Switches the tool", "Senses the machine" or "Drives a
+latch" on or off afterwards changes what the box does, and not what the
+platform has it as — so a reader later told it switches the tool drives its
+relay but can never be bound in `power`, and is never leased. The box notices:
+its resting screen says **Roles changed**, and the log says what the platform
+has and what the settings now claim.
+
+To fix it, either change the settings back, or register the box again: erase
+its settings and set it up from scratch with a new invite. Erasing the
+settings partition also erases its Wi-Fi details and everything else entered
+on the setup page:
+
+```sh
+espflash erase-parts --partition-table partitions.csv nvs
+```
+
 ---
 
 ## 7. Commissioning, in order

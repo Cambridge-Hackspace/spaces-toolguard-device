@@ -838,3 +838,35 @@ fn losing_wifi_says_no_wifi_however_the_broker_loss_follows() {
         assert_eq!(here(&r).0, "Present card");
     }
 }
+
+#[test]
+fn a_notice_takes_the_resting_screen_and_cards_are_still_taken() {
+    let mut r = reader();
+    let out = r.notice(Some("Roles changed"), 10);
+    assert_eq!(
+        screen(&out),
+        Some(("Present card".into(), "Roles changed".into()))
+    );
+    // Still a working box: a card is asked about as ever.
+    assert_eq!(publishes_to(&r.card(ALICE, 100)), vec![topic::SCAN_REQUEST]);
+    r.message(topic::SCAN_RESPONSE, &no("Unknown card"), 200);
+    r.tick(200 + SHOW_MS);
+    assert_eq!(here(&r).1, "Roles changed", "the notice did not come back");
+    // The diagnostic screen still wins when the box cannot ask at all: the
+    // address to reach the log at matters more then.
+    r.health(
+        Health {
+            wifi: true,
+            broker: false,
+            address: Some("192.168.1.50".into()),
+            clock: None,
+        },
+        10_000,
+    );
+    assert_eq!(here(&r), ("No edge".into(), "192.168.1.50".into()));
+    r.health(online(), 10_100);
+    assert_eq!(here(&r).1, "Roles changed");
+    // And cleared.
+    r.notice(None, 10_200);
+    assert_eq!(here(&r), ("Present card".into(), String::new()));
+}
