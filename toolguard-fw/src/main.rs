@@ -26,7 +26,7 @@ use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
 use spaces_device_espidf::status_light::{Status, StatusLight};
 use spaces_device_espidf::store::{key, Field, Store};
-use spaces_device_espidf::update::Updates;
+use spaces_device_espidf::update::{self, Updates};
 use spaces_device_espidf::{boot, watch_setup_button, weblog, Firmware};
 use toolguard_core::screen::Screen;
 use toolguard_core::{Action, Health, Reader, StopButton};
@@ -432,11 +432,17 @@ fn main() -> anyhow::Result<()> {
                     // startup is deaf after its first reconnect.
                     broker::resubscribe(&mut shell.client);
                     light.set(Status::Online);
+                    // What an update on probation has to get back to, or be
+                    // undone: an image that joins Wi-Fi and never reaches the
+                    // edge is not a working box.
+                    shell.updates.reach(update::BROKER);
                     broker_up = true;
                     reader.health(health(&address, broker_up), now())
                 }
                 broker::Event::Disconnected => {
                     light.set(Status::BrokerLost);
+                    // So an update arriving now is not asked to get it back.
+                    shell.updates.lose(update::BROKER);
                     broker_up = false;
                     reader.health(health(&address, broker_up), now())
                 }
