@@ -182,6 +182,19 @@ The relay must be wired so that **de-energized = laser disabled**. Then a box
 that loses power, crashes, or loses its lease fails to the safe state without
 having to do anything.
 
+**Put a pull-down on the relay driver's input** (10 kΩ to GND is plenty), and
+on the strike driver's (§4d). The firmware drives both pins low as the very
+first thing it does, but there is a moment before that — power-up, a reset,
+a board being flashed, a board with no firmware at all — when the pin is an
+input and floats, and a driver that reads a floating input as *on* closes
+for that moment. A pull-down means nothing the ESP32 is doing, or not doing,
+can energize the tool.
+
+The driver must be **active-high**: the pin goes high to energize. An
+active-low relay module — common, and sold as "low level trigger" — is on
+whenever its input is low, which is every moment this box means *off*. Do not
+use one here.
+
 **Test it with the laser tube disconnected first.** Confirm that an
 unauthorized card leaves the enable line in the disabled state and an authorized
 one releases it, with a meter on the line, before the tube is connected.

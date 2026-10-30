@@ -185,6 +185,17 @@ fn main() -> anyhow::Result<()> {
         pins.gpio17,
         pins.gpio18,
     );
+    // THE OUTPUTS FIRST, low, whatever the settings say. Until a pin is
+    // driven it is an input at its reset state -- floating, or weakly pulled --
+    // and `boot()` below can take seconds to join Wi-Fi and register, or
+    // forever while the setup portal is open. A relay driver that reads a
+    // floating input as on would energize the tool, or release a door, for all
+    // of that time.
+    let mut relay = PinDriver::output(relay)?;
+    relay.set_low()?;
+    let mut strike = PinDriver::output(strike)?;
+    strike.set_low()?;
+
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
     let version = env!("CARGO_PKG_VERSION");
@@ -299,44 +310,18 @@ fn main() -> anyhow::Result<()> {
         None
     };
 
-    // The relay, only when something is meant to be wired to it. Driven low at
-    // boot before anything else can ask for it: an output whose state nobody
-    // has set yet is an output that might be closed.
-    let relay: Option<PinDriver<'_, Output>> = if settings.config.gates_power {
-        match PinDriver::output(relay) {
-            Ok(mut p) => {
-                let _ = p.set_low();
-                Some(p)
-            }
-            Err(e) => {
-                log::error!("configured to switch the tool, but the relay pin failed: {e:#}");
-                light.set(Status::Failed);
-                std::thread::sleep(Duration::from_secs(30));
-                esp_idf_svc::hal::reset::restart();
-            }
-        }
+    // The two outputs, now that it is known which are wired. Both were driven
+    // low before `boot()`; an output that is not configured keeps its driver
+    // held anyway, because dropping one resets the pin and lets it float.
+    let (relay, _relay_unused) = if settings.config.gates_power {
+        (Some(relay), None)
     } else {
-        None
+        (None, Some(relay))
     };
-
-    // The latch's driver (CS:S #182), only when something is meant to be wired
-    // to it, and driven low at boot for the same reason as the relay: an
-    // output nobody has set is an output that might be holding a door open.
-    let strike: Option<PinDriver<'_, Output>> = if settings.config.drives_latch {
-        match PinDriver::output(strike) {
-            Ok(mut p) => {
-                let _ = p.set_low();
-                Some(p)
-            }
-            Err(e) => {
-                log::error!("configured to drive a latch, but the strike pin failed: {e:#}");
-                light.set(Status::Failed);
-                std::thread::sleep(Duration::from_secs(30));
-                esp_idf_svc::hal::reset::restart();
-            }
-        }
+    let (strike, _strike_unused) = if settings.config.drives_latch {
+        (Some(strike), None)
     } else {
-        None
+        (None, Some(strike))
     };
 
     // The sensed input. Pulled up, so an unconnected pin reads as "not
