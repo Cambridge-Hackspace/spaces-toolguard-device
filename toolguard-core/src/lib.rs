@@ -26,6 +26,7 @@
 pub mod button;
 pub mod reader;
 pub mod screen;
+pub mod sense;
 pub mod settings;
 
 pub use button::StopButton;

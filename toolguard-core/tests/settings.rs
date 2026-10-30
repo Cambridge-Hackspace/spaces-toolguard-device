@@ -233,3 +233,99 @@ fn a_box_registered_before_the_record_existed_is_unknown_not_a_change() {
 fn the_record_key_fits_the_store() {
     assert!(key::REG_ROLES.len() <= 15);
 }
+
+// ----------------------------------------------- how usage is measured (#10)
+
+use toolguard_core::sense::{Powered, Source};
+
+#[test]
+fn usage_measured_by_each_source() {
+    for (word, source) in [
+        ("none", Source::None),
+        ("level", Source::Level),
+        ("pulses", Source::Pulses),
+        (" Pulses ", Source::Pulses),
+        ("relay", Source::Relay),
+    ] {
+        let s = with(&[(key::USAGE_SRC, word), (key::GATES_POWER, "yes")]);
+        assert_eq!(s.source, source, "for {word:?}");
+        assert_eq!(s.config.senses_running, source.senses(), "for {word:?}");
+    }
+}
+
+#[test]
+fn a_box_set_up_before_the_choice_keeps_what_it_did() {
+    // "Senses the machine" was a yes/no: yes read the level, no read nothing.
+    assert_eq!(with(&[(key::SENSES_RUN, "yes")]).source, Source::Level);
+    assert_eq!(with(&[(key::SENSES_RUN, "no")]).source, Source::None);
+    assert_eq!(with(&[]).source, Source::None);
+    // And the new setting wins over the old one when both are there.
+    assert_eq!(
+        with(&[(key::SENSES_RUN, "yes"), (key::USAGE_SRC, "pulses")]).source,
+        Source::Pulses
+    );
+}
+
+#[test]
+fn a_source_that_is_not_one_is_reported_and_falls_back() {
+    let s = with(&[(key::USAGE_SRC, "pulse"), (key::SENSES_RUN, "yes")]);
+    assert_eq!(s.source, Source::Level, "fell back past the old setting");
+    assert!(
+        s.warnings.iter().any(|w| w.contains(key::USAGE_SRC)),
+        "{:?}",
+        s.warnings
+    );
+}
+
+#[test]
+fn a_sensing_source_registers_a_sensor_and_relay_does_not() {
+    assert_eq!(
+        with(&[(key::USAGE_SRC, "pulses")]).roles(),
+        vec!["reader", "sensor"]
+    );
+    assert_eq!(
+        with(&[(key::USAGE_SRC, "relay"), (key::GATES_POWER, "yes")]).roles(),
+        vec!["reader", "power"]
+    );
+}
+
+#[test]
+fn relay_time_on_a_box_with_no_relay_is_reported() {
+    let s = with(&[(key::USAGE_SRC, "relay")]);
+    assert!(
+        s.warnings.iter().any(|w| w.contains("relay")),
+        "{:?}",
+        s.warnings
+    );
+    assert!(
+        with(&[(key::USAGE_SRC, "relay"), (key::GATES_POWER, "yes")])
+            .warnings
+            .is_empty()
+    );
+}
+
+#[test]
+fn machine_powered_by_each_qualifier() {
+    for (word, powered) in [
+        ("none", Powered::Always),
+        ("input", Powered::Input),
+        ("seen-idle", Powered::SeenIdle),
+        ("", Powered::Always),
+    ] {
+        assert_eq!(
+            with(&[(key::POWERED_BY, word)]).powered,
+            powered,
+            "{word:?}"
+        );
+    }
+    assert_eq!(with(&[]).powered, Powered::Always);
+    assert!(with(&[]).powered_active_low);
+    assert!(!with(&[(key::POWERED_LOW, "no")]).powered_active_low);
+}
+
+#[test]
+fn the_new_keys_fit_the_store() {
+    for k in [key::USAGE_SRC, key::POWERED_BY, key::POWERED_LOW] {
+        assert!(k.len() <= 15, "{k}");
+    }
+}

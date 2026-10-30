@@ -29,6 +29,7 @@
 use spaces_device::{Action as DeviceAction, Activity, Config, Module, Outcome, Output};
 
 use crate::screen::{self, Health, Screen};
+use crate::sense::{Powered, Reading, Sense, Source};
 
 /// An effect for the shell to carry out.
 ///
@@ -97,11 +98,21 @@ pub struct Reader {
     /// Shown on the resting screen in place of the clock; see
     /// [`Reader::notice`].
     notice: Option<String>,
+    /// How [`Reader::sense`] decides the machine is working.
+    sense: Sense,
 }
 
 impl Reader {
+    /// A reader whose usage source follows `config.senses_running`: the
+    /// input's level, or nothing. See [`Reader::sensing`] for the others.
     pub fn new(config: Config) -> Self {
+        let source = if config.senses_running {
+            Source::Level
+        } else {
+            Source::None
+        };
         Reader {
+            sense: Sense::new(source, Powered::Always),
             module: Module::new(config),
             health: Health::default(),
             shown: None,
@@ -111,6 +122,13 @@ impl Reader {
             in_session: false,
             notice: None,
         }
+    }
+
+    /// Measure usage by `source`, qualified by `powered`, rather than by the
+    /// input's level alone.
+    pub fn sensing(mut self, source: Source, powered: Powered) -> Self {
+        self.sense = Sense::new(source, powered);
+        self
     }
 
     pub fn tool_id(&self) -> &str {
@@ -205,6 +223,14 @@ impl Reader {
         let mut out = self.carry(actions, now);
         self.refresh(now, &mut out);
         out
+    }
+
+    /// What the sense pins said this pass. Call every pass: the source decides
+    /// from it whether the machine is working, and [`Reader::running`] is told.
+    pub fn sense(&mut self, reading: Reading, now: u64) -> Vec<Action> {
+        let open = matches!(self.module.activity(), Activity::Session { .. });
+        let working = self.sense.working(reading, open);
+        self.running(working, now)
     }
 
     /// A stop button was pressed.

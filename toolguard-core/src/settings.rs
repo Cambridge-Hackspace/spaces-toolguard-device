@@ -23,6 +23,8 @@
 
 use spaces_device::Config;
 
+use crate::sense::{Powered, Source};
+
 /// Store keys. **At most fifteen characters each**, which is the NVS limit and
 /// the reason some of these are abbreviated.
 pub mod key {
@@ -43,6 +45,9 @@ pub mod key {
     /// The roles the device registered with, as [`super::roles_record`]
     /// writes them. Written by the firmware, never typed by a person.
     pub const REG_ROLES: &str = "reg_roles";
+    pub const USAGE_SRC: &str = "usage_src";
+    pub const POWERED_BY: &str = "powered_by";
+    pub const POWERED_LOW: &str = "powered_low";
 }
 
 /// How this box is configured, read once at boot.
@@ -60,6 +65,12 @@ pub struct Settings {
     /// Momentary, to GND, read with the internal pull-up; so there is no
     /// polarity to configure, and an unconnected pin reads as "not pressed".
     pub stop_button: bool,
+    /// What usage is measured by (#10).
+    pub source: Source,
+    /// What else must hold for the machine to count as working.
+    pub powered: Powered,
+    /// Whether the powered input reads the machine as on when LOW.
+    pub powered_active_low: bool,
     /// What could not be read, and what was used instead, for the log.
     pub warnings: Vec<String>,
 }
@@ -79,7 +90,43 @@ impl Settings {
         };
         let reads_cards = r.flag(key::READS_CARDS, true);
         let gates_power = r.flag(key::GATES_POWER, false);
-        let senses_running = r.flag(key::SENSES_RUN, false);
+        // "Usage measured by", or, for a box set up before it existed, what
+        // "Senses the machine" said: yes was the level, no was nothing.
+        let source = r
+            .choice(
+                key::USAGE_SRC,
+                &[
+                    ("none", Source::None),
+                    ("level", Source::Level),
+                    ("pulses", Source::Pulses),
+                    ("relay", Source::Relay),
+                ],
+            )
+            .unwrap_or_else(|| {
+                if r.flag(key::SENSES_RUN, false) {
+                    Source::Level
+                } else {
+                    Source::None
+                }
+            });
+        if source == Source::Relay && !gates_power {
+            r.warnings.push(format!(
+                "{}: relay, but this box does not switch the tool, so there is no relay \
+                 time and nothing is reported",
+                key::USAGE_SRC
+            ));
+        }
+        let powered = r
+            .choice(
+                key::POWERED_BY,
+                &[
+                    ("none", Powered::Always),
+                    ("input", Powered::Input),
+                    ("seen-idle", Powered::SeenIdle),
+                ],
+            )
+            .unwrap_or(Powered::Always);
+        let senses_running = source.senses();
 
         let mut config = Config::new("", "");
         config.reads_cards = reads_cards;
@@ -103,6 +150,9 @@ impl Settings {
             config,
             sense_active_low: r.flag(key::SENSE_LOW, true),
             stop_button: r.flag(key::STOP_BTN, false),
+            source,
+            powered,
+            powered_active_low: r.flag(key::POWERED_LOW, true),
             warnings: r.warnings,
         }
     }
@@ -141,7 +191,8 @@ impl Settings {
         format!(
             "reads_cards={} gates_power={} senses_running={} (active {}) \
              hold={}ms assert={}ms stop_2tap={} idle_end={}ms max_session={}ms usage_every={}ms \
-             reports_usage={} lease_wait={}ms stop_button={} drives_latch={}",
+             reports_usage={} lease_wait={}ms stop_button={} drives_latch={} \
+             usage_by={:?} powered_by={:?} (active {})",
             self.config.reads_cards,
             self.config.gates_power,
             self.config.senses_running,
@@ -156,6 +207,13 @@ impl Settings {
             self.config.first_lease_timeout_ms,
             self.stop_button,
             self.config.drives_latch,
+            self.source,
+            self.powered,
+            if self.powered_active_low {
+                "low"
+            } else {
+                "high"
+            },
         )
     }
 }
@@ -184,6 +242,25 @@ impl Reading<'_> {
                 default
             }
         }
+    }
+
+    /// One of `options`, by name, or `None` if absent, blank or not one of
+    /// them -- reported, since a typo here changes what is billed.
+    fn choice<T: Copy>(&mut self, key: &str, options: &[(&str, T)]) -> Option<T> {
+        let v = (self.get)(key)?;
+        let v = v.trim().to_ascii_lowercase();
+        if v.is_empty() {
+            return None;
+        }
+        let found = options.iter().find(|(name, _)| *name == v).map(|(_, t)| *t);
+        if found.is_none() {
+            let names: Vec<&str> = options.iter().map(|(n, _)| *n).collect();
+            self.warnings.push(format!(
+                "{key}: {v:?} is not one of {}; using the default",
+                names.join(", ")
+            ));
+        }
+        found
     }
 
     /// A whole number, or `default` if it is absent or not one.
