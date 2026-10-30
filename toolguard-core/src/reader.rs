@@ -50,6 +50,15 @@ pub enum Action {
     /// For the log, and for a human reading it later. Never for the panel: the
     /// panel has sixteen columns and these do not fit.
     Note(String),
+    /// Something is now open, or nothing is: a question out to the edge, a
+    /// session, or the tool energized. Emitted only on change.
+    ///
+    /// For the firmware-update guard, which refuses an update while anything is
+    /// open: a box restarting mid-session drops the tool's power if it switches
+    /// it, and comes back up knowing nothing of the session it had, which then
+    /// nobody releases. A question in flight counts too, because a restart
+    /// between it and its answer is a yes nobody acts on.
+    InSession(bool),
 }
 
 /// How long an outcome stays on the panel before it returns to the resting
@@ -80,6 +89,11 @@ pub struct Reader {
     /// While an outcome is on the panel, when it stops being.
     showing_until: Option<u64>,
     last_card: Option<(String, u64)>,
+    /// Whether the tool output is on, as last driven. A plug owns no session
+    /// and reports no outcomes, so for it this is what "open" means.
+    tool_on: bool,
+    /// What [`Action::InSession`] last said.
+    in_session: bool,
 }
 
 impl Reader {
@@ -90,6 +104,8 @@ impl Reader {
             shown: None,
             showing_until: None,
             last_card: None,
+            tool_on: false,
+            in_session: false,
         }
     }
 
@@ -208,7 +224,12 @@ impl Reader {
                 DeviceAction::Publish { topic, payload } => {
                     out.push(Action::Publish { topic, payload })
                 }
-                DeviceAction::Set { output, on } => out.push(Action::Set { output, on }),
+                DeviceAction::Set { output, on } => {
+                    if output == Output::Tool {
+                        self.tool_on = on;
+                    }
+                    out.push(Action::Set { output, on })
+                }
                 DeviceAction::Note(text) => out.push(Action::Note(text)),
                 DeviceAction::Outcome(outcome) => {
                     let screen = match &outcome {
@@ -261,6 +282,9 @@ impl Reader {
     /// else is on it, so news about the network cannot wipe a verdict the
     /// member is still reading.
     fn refresh(&mut self, now: u64, out: &mut Vec<Action>) {
+        // First, and not behind the outcome hold below: whether a session is
+        // open does not wait for the member to finish reading the panel.
+        self.settle_session(out);
         if let Some(until) = self.showing_until {
             if now < until {
                 return;
@@ -286,6 +310,15 @@ impl Reader {
             }
         };
         self.show(screen, out);
+    }
+
+    /// Say whether anything is open, when that has changed.
+    fn settle_session(&mut self, out: &mut Vec<Action>) {
+        let open = self.tool_on || self.module.activity() != Activity::Idle;
+        if open != self.in_session {
+            self.in_session = open;
+            out.push(Action::InSession(open));
+        }
     }
 
     /// Emit a redraw only when the content actually changes.

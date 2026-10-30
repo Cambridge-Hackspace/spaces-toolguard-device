@@ -302,7 +302,7 @@ fn main() -> anyhow::Result<()> {
     // The relay, only when something is meant to be wired to it. Driven low at
     // boot before anything else can ask for it: an output whose state nobody
     // has set yet is an output that might be closed.
-    let mut relay: Option<PinDriver<'_, Output>> = if settings.config.gates_power {
+    let relay: Option<PinDriver<'_, Output>> = if settings.config.gates_power {
         match PinDriver::output(relay) {
             Ok(mut p) => {
                 let _ = p.set_low();
@@ -322,7 +322,7 @@ fn main() -> anyhow::Result<()> {
     // The latch's driver (CS:S #182), only when something is meant to be wired
     // to it, and driven low at boot for the same reason as the relay: an
     // output nobody has set is an output that might be holding a door open.
-    let mut strike: Option<PinDriver<'_, Output>> = if settings.config.drives_latch {
+    let strike: Option<PinDriver<'_, Output>> = if settings.config.drives_latch {
         match PinDriver::output(strike) {
             Ok(mut p) => {
                 let _ = p.set_low();
@@ -374,7 +374,7 @@ fn main() -> anyhow::Result<()> {
     // --- the loop -----------------------------------------------------------
     let mut reader = Reader::new(settings.config.clone());
     let (tx, rx) = mpsc::channel::<broker::Event>();
-    let mut client = broker::connect(&online, tx)?;
+    let client = broker::connect(&online, tx)?;
 
     let started = Instant::now();
     let now = || started.elapsed().as_millis() as u64;
@@ -384,35 +384,24 @@ fn main() -> anyhow::Result<()> {
     // not return until it is), so this reads "No edge" and names the half that
     // is actually missing.
     let mut broker_up = false;
+    let mut shell = Shell {
+        panel,
+        client,
+        relay,
+        strike,
+        updates: online.updates.clone(),
+    };
     // `start` first: it puts the outputs in a known state and sends the first
     // heartbeats -- the power report and the alive pulse -- which are what
     // credit this device with being alive on the local broker.
-    apply(
-        reader.start(now()),
-        &mut panel,
-        &mut client,
-        &mut relay,
-        &mut strike,
-    );
-    apply(
-        reader.health(health(&address, broker_up), now()),
-        &mut panel,
-        &mut client,
-        &mut relay,
-        &mut strike,
-    );
+    shell.apply(reader.start(now()));
+    shell.apply(reader.health(health(&address, broker_up), now()));
 
     loop {
         // One look at the antenna, which is the thing with a person waiting on
         // it, before anything else.
         if let Some(uid) = card_reader.as_mut().and_then(|r| r.poll()) {
-            apply(
-                reader.card(&uid, now()),
-                &mut panel,
-                &mut client,
-                &mut relay,
-                &mut strike,
-            );
+            shell.apply(reader.card(&uid, now()));
         }
 
         // Then the machine. Sampled every pass rather than on a change, which
@@ -424,26 +413,14 @@ fn main() -> anyhow::Result<()> {
             // a semantic bool -- "the machine is working" -- so the sense of
             // this installation's wiring is applied here and nowhere else.
             let working = pin.is_low() == sense_active_low;
-            apply(
-                reader.running(working, now()),
-                &mut panel,
-                &mut client,
-                &mut relay,
-                &mut strike,
-            );
+            shell.apply(reader.running(working, now()));
         }
 
         // Then the stop button, which anyone may press. One stop per press,
         // however long the finger stays; the core turns the bounce into that.
         if let Some(pin) = stop.as_mut() {
             if stop_button.sample(pin.is_low(), now()) {
-                apply(
-                    reader.tool_off(now()),
-                    &mut panel,
-                    &mut client,
-                    &mut relay,
-                    &mut strike,
-                );
+                shell.apply(reader.tool_off(now()));
             }
         }
 
@@ -453,7 +430,7 @@ fn main() -> anyhow::Result<()> {
                     // Every connect, not once: a clean session means the broker
                     // has forgotten us, and a client that subscribes only at
                     // startup is deaf after its first reconnect.
-                    broker::resubscribe(&mut client);
+                    broker::resubscribe(&mut shell.client);
                     light.set(Status::Online);
                     broker_up = true;
                     reader.health(health(&address, broker_up), now())
@@ -467,90 +444,105 @@ fn main() -> anyhow::Result<()> {
                     reader.message(&topic, &payload, now())
                 }
             };
-            apply(actions, &mut panel, &mut client, &mut relay, &mut strike);
+            shell.apply(actions);
         }
 
-        apply(
-            reader.tick(now()),
-            &mut panel,
-            &mut client,
-            &mut relay,
-            &mut strike,
-        );
+        shell.apply(reader.tick(now()));
         std::thread::sleep(POLL);
     }
 }
 
-/// Carry out what the core decided.
-fn apply(
-    actions: Vec<Action>,
-    panel: &mut Option<lcd::Panel<'_>>,
-    client: &mut esp_idf_svc::mqtt::client::EspMqttClient<'static>,
-    relay: &mut Option<PinDriver<'_, Output>>,
-    strike: &mut Option<PinDriver<'_, Output>>,
-) {
-    use esp_idf_svc::mqtt::client::QoS;
-    for action in actions {
-        match action {
-            Action::Publish { topic, payload } => {
-                // `enqueue`, never `publish`: publish can block for up to ten
-                // seconds and this is the thread that must keep polling the
-                // antenna.
-                if let Err(e) = client.enqueue(topic, QoS::AtLeastOnce, false, payload.as_bytes()) {
-                    log::warn!("could not enqueue to {topic}: {e}");
-                }
-            }
-            Action::Show(screen) => {
-                if let Some(p) = panel.as_mut() {
-                    if let Err(e) = p.show(&screen) {
-                        // Not fatal and not silent: the panel may recover on the
-                        // next change, and the log says that it did not now.
-                        log::warn!("panel write failed: {e:#}");
+/// What the core's decisions are carried out on.
+struct Shell<'d> {
+    panel: Option<lcd::Panel<'d>>,
+    client: esp_idf_svc::mqtt::client::EspMqttClient<'static>,
+    relay: Option<PinDriver<'d, Output>>,
+    strike: Option<PinDriver<'d, Output>>,
+    updates: Updates,
+}
+
+impl Shell<'_> {
+    /// Carry out what the core decided.
+    fn apply(&mut self, actions: Vec<Action>) {
+        use esp_idf_svc::mqtt::client::QoS;
+        let Shell {
+            panel,
+            client,
+            relay,
+            strike,
+            updates,
+        } = self;
+        for action in actions {
+            match action {
+                Action::Publish { topic, payload } => {
+                    // `enqueue`, never `publish`: publish can block for up to ten
+                    // seconds and this is the thread that must keep polling the
+                    // antenna.
+                    if let Err(e) =
+                        client.enqueue(topic, QoS::AtLeastOnce, false, payload.as_bytes())
+                    {
+                        log::warn!("could not enqueue to {topic}: {e}");
                     }
                 }
-            }
-            Action::Note(note) => log::info!("{note}"),
-            Action::Set { output, on } => {
-                log::info!("{output:?} {}", if on { "ON" } else { "off" });
-                // The tool output and the strike reach hardware here.
-                // `Output::Running` is an indicator and this box has no lamp
-                // for it -- the panel is what tells a member the machine is
-                // working, and the status LED is already spoken for by the
-                // network state.
-                if output == toolguard_core::Output::Strike {
-                    match strike.as_mut() {
-                        Some(pin) => {
-                            let r = if on { pin.set_high() } else { pin.set_low() };
-                            if let Err(e) = r {
-                                // Loud, for the same reason as the relay: a
-                                // write that failed means a door is not where
-                                // the core believes it is.
-                                log::error!("strike write failed: {e:#}");
-                            }
+                Action::Show(screen) => {
+                    if let Some(p) = panel.as_mut() {
+                        if let Err(e) = p.show(&screen) {
+                            // Not fatal and not silent: the panel may recover on the
+                            // next change, and the log says that it did not now.
+                            log::warn!("panel write failed: {e:#}");
                         }
-                        // Unreachable by construction -- the core emits no
-                        // Strike action unless `drives_latch` is set, and the
-                        // pin is opened whenever it is.
-                        None => log::error!("asked to drive the latch with no strike configured"),
                     }
                 }
-                if output == toolguard_core::Output::Tool {
-                    match relay.as_mut() {
-                        Some(pin) => {
-                            let r = if on { pin.set_high() } else { pin.set_low() };
-                            if let Err(e) = r {
-                                // Loud: this is the output a machine's power
-                                // depends on, and a write that failed means the
-                                // relay is not where the core believes it is.
-                                log::error!("relay write failed: {e:#}");
+                Action::Note(note) => log::info!("{note}"),
+                // Updates wait while anything is open: a restart mid-session drops
+                // the tool, and the box comes back knowing nothing of the session.
+                Action::InSession(open) => updates.set_in_session(open),
+                Action::Set { output, on } => {
+                    log::info!("{output:?} {}", if on { "ON" } else { "off" });
+                    // The tool output and the strike reach hardware here.
+                    // `Output::Running` is an indicator and this box has no lamp
+                    // for it -- the panel is what tells a member the machine is
+                    // working, and the status LED is already spoken for by the
+                    // network state.
+                    if output == toolguard_core::Output::Strike {
+                        match strike.as_mut() {
+                            Some(pin) => {
+                                let r = if on { pin.set_high() } else { pin.set_low() };
+                                if let Err(e) = r {
+                                    // Loud, for the same reason as the relay: a
+                                    // write that failed means a door is not where
+                                    // the core believes it is.
+                                    log::error!("strike write failed: {e:#}");
+                                }
+                            }
+                            // Unreachable by construction -- the core emits no
+                            // Strike action unless `drives_latch` is set, and the
+                            // pin is opened whenever it is.
+                            None => {
+                                log::error!("asked to drive the latch with no strike configured")
                             }
                         }
-                        // Unreachable by construction -- the core emits no Tool
-                        // action unless `gates_power` is set, and the relay is
-                        // opened whenever it is. Logged rather than ignored
-                        // because if it ever happens, the thing that did not
-                        // happen is a machine switching off.
-                        None => log::error!("asked to switch the tool with no relay configured"),
+                    }
+                    if output == toolguard_core::Output::Tool {
+                        match relay.as_mut() {
+                            Some(pin) => {
+                                let r = if on { pin.set_high() } else { pin.set_low() };
+                                if let Err(e) = r {
+                                    // Loud: this is the output a machine's power
+                                    // depends on, and a write that failed means the
+                                    // relay is not where the core believes it is.
+                                    log::error!("relay write failed: {e:#}");
+                                }
+                            }
+                            // Unreachable by construction -- the core emits no Tool
+                            // action unless `gates_power` is set, and the relay is
+                            // opened whenever it is. Logged rather than ignored
+                            // because if it ever happens, the thing that did not
+                            // happen is a machine switching off.
+                            None => {
+                                log::error!("asked to switch the tool with no relay configured")
+                            }
+                        }
                     }
                 }
             }
