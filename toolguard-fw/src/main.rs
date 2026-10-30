@@ -18,10 +18,11 @@
 //! The roles it declares (`reader` alone — it has no relay), the one setting it
 //! adds (its tool), the two peripherals, and the loop at the bottom.
 
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
-use esp_idf_svc::hal::gpio::{Output, PinDriver, Pull};
+use esp_idf_svc::hal::gpio::{Input, InputPin, InterruptType, Output, PinDriver, Pull};
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::wifi::WifiEvent;
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
@@ -30,6 +31,7 @@ use spaces_device_espidf::store::{key, Field, Store};
 use spaces_device_espidf::update::{self, Updates};
 use spaces_device_espidf::{boot, watch_setup_button, weblog, Firmware};
 use toolguard_core::screen::Screen;
+use toolguard_core::sense::{Powered, Reading, Source};
 use toolguard_core::{Action, Health, Reader, StopButton};
 
 mod board;
@@ -90,7 +92,22 @@ fn main() -> anyhow::Result<()> {
     // C6 Super Mini: GPIO8 is the RGB LED and a strapping pin, GPIO9 is BOOT,
     // GPIO12/13 are native USB and the only console there is.
     #[cfg(esp32c6)]
-    let (light_pin, setup_pin, sclk, mosi, miso, cs, rst, sda, scl, sense, relay, stop, strike) = (
+    let (
+        light_pin,
+        setup_pin,
+        sclk,
+        mosi,
+        miso,
+        cs,
+        rst,
+        sda,
+        scl,
+        sense,
+        relay,
+        stop,
+        strike,
+        powered,
+    ) = (
         pins.gpio8,
         pins.gpio9,
         pins.gpio0,
@@ -111,6 +128,10 @@ fn main() -> anyhow::Result<()> {
         pins.gpio19,
         pins.gpio20,
         pins.gpio21,
+        // The powered input (#8): an edge pin on the Super Mini, and neither a
+        // strapping pin nor one of the ADC pins (GPIO0-6) an analog source
+        // would want.
+        pins.gpio7,
     );
 
     // UNTESTED: no C3 here, so this compiles and nothing more. Same strapping
@@ -134,6 +155,8 @@ fn main() -> anyhow::Result<()> {
         pins.gpio20,
         pins.gpio21,
     );
+    // No powered input on the C3: every usable pin is taken. "Machine powered
+    // by: input" falls back to seen-idle there, and says so.
 
     // UNTESTED: no C5 here, so this compiles and nothing more (#15). The C5's
     // strapping pair is 27 and 28 -- "GPIO27 = 0 and GPIO28 = 0 is invalid",
@@ -165,13 +188,30 @@ fn main() -> anyhow::Result<()> {
         pins.gpio3,
         pins.gpio0,
     );
+    // No powered input on the C5 either: the eleven pins above are the whole
+    // budget on the DevKitC-1. As on the C3, "input" falls back to seen-idle.
 
     // UNTESTED: no S3 here. Its addressable LED is on GPIO48 on the boards that
     // have one, flash and PSRAM occupy 26-32, and USB is 19/20 -- so this stays
     // clear of all of them. GPIO9 is kept for BOOT for consistency with the
     // other two rather than because the S3 needs it there.
     #[cfg(esp32s3)]
-    let (light_pin, setup_pin, sclk, mosi, miso, cs, rst, sda, scl, sense, relay, stop, strike) = (
+    let (
+        light_pin,
+        setup_pin,
+        sclk,
+        mosi,
+        miso,
+        cs,
+        rst,
+        sda,
+        scl,
+        sense,
+        relay,
+        stop,
+        strike,
+        powered,
+    ) = (
         pins.gpio48,
         pins.gpio0,
         pins.gpio12,
@@ -185,6 +225,7 @@ fn main() -> anyhow::Result<()> {
         pins.gpio16,
         pins.gpio17,
         pins.gpio18,
+        pins.gpio21,
     );
     // THE OUTPUTS FIRST, low, whatever the settings say. Until a pin is
     // driven it is an input at its reset state -- floating, or weakly pulled --
@@ -324,8 +365,15 @@ fn main() -> anyhow::Result<()> {
     // The sensed input. Pulled up, so an unconnected pin reads as "not
     // working" when the sense is active-low, which is the quiet default rather
     // than a machine that looks permanently busy.
-    let mut sense = if settings.config.senses_running {
-        match PinDriver::input(sense, Pull::Up) {
+    // The sensed input. Pulled up, so an unconnected pin reads as "not
+    // working" when the sense is active-low, which is the quiet default rather
+    // than a machine that looks permanently busy.
+    let sense_active_low = settings.sense_active_low;
+    // Set by the interrupt when the input becomes asserted, however briefly,
+    // and taken by the loop: a pulse between two passes is not missed (#9).
+    let pulsed = Arc::new(AtomicBool::new(false));
+    let mut sense = if settings.source.senses() {
+        match sense_input(sense, settings.source, sense_active_low, &pulsed) {
             Ok(p) => Some(p),
             Err(e) => {
                 log::error!("configured to sense the machine, but the input pin failed: {e:#}");
@@ -335,7 +383,33 @@ fn main() -> anyhow::Result<()> {
     } else {
         None
     };
-    let sense_active_low = settings.sense_active_low;
+
+    // The powered input (#8), on the chips that have a pin for it.
+    let powered_active_low = settings.powered_active_low;
+    #[cfg(any(esp32c6, esp32s3))]
+    let powered = if settings.powered == Powered::Input {
+        match PinDriver::input(powered, Pull::Up) {
+            Ok(p) => Some(p),
+            Err(e) => {
+                // Absent reads as off, which bills nobody rather than everyone.
+                log::error!("configured with a powered input, but the pin failed: {e:#}");
+                None
+            }
+        }
+    } else {
+        None
+    };
+    #[cfg(any(esp32c3, esp32c5))]
+    let powered: Option<PinDriver<'_, Input>> = {
+        if settings.powered == Powered::Input {
+            log::warn!(
+                "machine powered by input, but an {} has no pin left for one; using seen-idle",
+                board::CHIP
+            );
+            settings.powered = Powered::SeenIdle;
+        }
+        None
+    };
 
     // The stop button: a momentary switch to GND, so the pull-up makes an
     // unconnected or open contact read "not pressed". Debounced in the core;
@@ -354,7 +428,8 @@ fn main() -> anyhow::Result<()> {
     let mut stop_button = StopButton::new(STOP_DEBOUNCE_MS);
 
     // --- the loop -----------------------------------------------------------
-    let mut reader = Reader::new(settings.config.clone());
+    let mut reader =
+        Reader::new(settings.config.clone()).sensing(settings.source, settings.powered);
     let (tx, rx) = mpsc::channel::<broker::Event>();
     // Wi-Fi after boot. `boot()` returns only once joined, but a network can
     // go later, and the panel must then say "No Wi-Fi" rather than blame the
@@ -417,11 +492,22 @@ fn main() -> anyhow::Result<()> {
         // value actually changes, so handing it every reading costs nothing and
         // means no edge can be missed between polls.
         if let Some(pin) = sense.as_mut() {
-            // The ONE inversion in the whole firmware. `Reader::running` takes
-            // a semantic bool -- "the machine is working" -- so the sense of
-            // this installation's wiring is applied here and nowhere else.
-            let working = pin.is_low() == sense_active_low;
-            shell.apply(reader.running(working, now()));
+            // The inversions, here and nowhere else: the core takes what the
+            // machine is doing, and the polarity of this installation's wiring
+            // is applied as the pins are read.
+            let latched = pulsed.swap(false, Ordering::AcqRel);
+            if latched {
+                // The driver disables the interrupt each time it fires.
+                if let Err(e) = pin.enable_interrupt() {
+                    log::warn!("could not re-arm the sense interrupt: {e}");
+                }
+            }
+            let reading = Reading {
+                active: pin.is_low() == sense_active_low,
+                pulsed: latched,
+                powered: powered.as_ref().map(|p| p.is_low() == powered_active_low),
+            };
+            shell.apply(reader.sense(reading, now()));
         }
 
         // Then the stop button, which anyone may press. One stop per press,
@@ -587,6 +673,36 @@ fn give_up(
     light.set(Status::Failed);
     std::thread::sleep(Duration::from_secs(30));
     esp_idf_svc::hal::reset::restart()
+}
+
+/// The sense input, and for [`Source::Pulses`] an interrupt that sets `pulsed`
+/// whenever it becomes asserted.
+///
+/// The interrupt does nothing but store to an atomic, which is all that is
+/// safe in one. The loop takes the flag each pass and re-arms it.
+fn sense_input<'d>(
+    pin: impl InputPin + 'd,
+    source: Source,
+    active_low: bool,
+    pulsed: &Arc<AtomicBool>,
+) -> anyhow::Result<PinDriver<'d, Input>> {
+    let mut driver = PinDriver::input(pin, Pull::Up)?;
+    if source == Source::Pulses {
+        driver.set_interrupt_type(if active_low {
+            InterruptType::NegEdge
+        } else {
+            InterruptType::PosEdge
+        })?;
+        let flag = pulsed.clone();
+        // SAFETY: the callback only stores to an atomic, which is ISR-safe, and
+        // the driver is held for the life of the program, so it is never
+        // forgotten with the callback still registered.
+        unsafe {
+            driver.subscribe(move || flag.store(true, Ordering::Release))?;
+        }
+        driver.enable_interrupt()?;
+    }
+    Ok(driver)
 }
 
 /// Whether the platform has the roles this box now claims, recording them

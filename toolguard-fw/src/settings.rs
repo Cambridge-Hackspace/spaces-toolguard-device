@@ -36,12 +36,17 @@ pub const FIELDS: &[Field] = &[
         secret: false,
         required: false,
     },
+    // "Senses the machine" (key::SENSES_RUN) was here. It is still read for a
+    // box set up before this field, which keeps doing what it did; it is not
+    // offered, because "Usage measured by" says the same and more.
     Field {
-        key: key::SENSES_RUN,
-        label: "Senses the machine",
-        hint: "no (default). yes if an input is wired to something that says the machine \
-               is working. Leave it no when nothing is: a device that reports zero working \
-               time is believed, and on a tool billed by working time that bills nothing",
+        key: key::USAGE_SRC,
+        label: "Usage measured by",
+        hint: "none (default): nothing is wired, and no working time is reported. level: \
+               working while the sense input is asserted. pulses: working while it is \
+               asserted or pulsing -- a laser's L-ON1, which drops for each dot while \
+               engraving. relay: the time this box's relay was on. A device that reports \
+               zero working time is believed, so leave it none unless something is wired",
         secret: false,
         required: false,
     },
@@ -51,6 +56,25 @@ pub const FIELDS: &[Field] = &[
         hint: "yes (default) -- a Ruida laser's L-ON1 pulls low to enable, and most dry \
                contacts close to ground. Check the machine: on a Ruida this is the \
                'Laser Output Signal' vendor setting and it can be either way round",
+        secret: false,
+        required: false,
+    },
+    Field {
+        key: key::POWERED_BY,
+        label: "Machine powered by",
+        hint: "none (default). For a sense signal that reads as working when the machine \
+               is off, as L-ON1 does (its pull-up is powered by the machine). input: a \
+               second input says the machine is on (not on a C3 or C5). seen-idle: the signal \
+               must read idle once each session before it counts -- covers a machine off \
+               at sign-on, not one switched off later",
+        secret: false,
+        required: false,
+    },
+    Field {
+        key: key::POWERED_LOW,
+        label: "Powered input is active low",
+        hint: "yes (default): the powered input reads LOW while the machine is on, as an \
+               optocoupler pulling to ground does",
         secret: false,
         required: false,
     },
