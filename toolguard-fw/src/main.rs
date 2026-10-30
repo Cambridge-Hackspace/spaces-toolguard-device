@@ -23,6 +23,7 @@ use std::time::{Duration, Instant};
 
 use esp_idf_svc::hal::gpio::{Output, PinDriver, Pull};
 use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::wifi::WifiEvent;
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
 use spaces_device_espidf::status_light::{Status, StatusLight};
 use spaces_device_espidf::store::{key, Field, Store};
@@ -243,7 +244,7 @@ fn main() -> anyhow::Result<()> {
 
     let online = match boot(
         peripherals.modem,
-        sysloop,
+        sysloop.clone(),
         nvs,
         Firmware {
             fields,
@@ -350,6 +351,20 @@ fn main() -> anyhow::Result<()> {
     // --- the loop -----------------------------------------------------------
     let mut reader = Reader::new(settings.config.clone());
     let (tx, rx) = mpsc::channel::<broker::Event>();
+    // Wi-Fi after boot. `boot()` returns only once joined, but a network can
+    // go later, and the panel must then say "No Wi-Fi" rather than blame the
+    // edge. spaces-device-espidf rejoins by itself; this only listens.
+    let wifi_tx = tx.clone();
+    let _wifi_events = sysloop
+        .subscribe::<WifiEvent, _>(move |event| {
+            let up = match event {
+                WifiEvent::StaConnected(_) => true,
+                WifiEvent::StaDisconnected(_) => false,
+                _ => return,
+            };
+            let _ = wifi_tx.send(broker::Event::Wifi(up));
+        })
+        .inspect_err(|e| log::warn!("cannot watch Wi-Fi; the panel will assume it is up: {e}"));
     // Fatal like the others, and not a `?`: returning from `main` ends the
     // program but not the board, which would stay on the network serving
     // updates with nothing reading cards and nothing saying why. The usual
@@ -370,6 +385,7 @@ fn main() -> anyhow::Result<()> {
     // not return until it is), so this reads "No edge" and names the half that
     // is actually missing.
     let mut broker_up = false;
+    let mut wifi_up = true;
     let mut shell = Shell {
         panel,
         client,
@@ -381,7 +397,7 @@ fn main() -> anyhow::Result<()> {
     // heartbeats -- the power report and the alive pulse -- which are what
     // credit this device with being alive on the local broker.
     shell.apply(reader.start(now()));
-    shell.apply(reader.health(health(&address, broker_up), now()));
+    shell.apply(reader.health(health(&address, wifi_up, broker_up), now()));
 
     loop {
         // One look at the antenna, which is the thing with a person waiting on
@@ -423,14 +439,18 @@ fn main() -> anyhow::Result<()> {
                     // edge is not a working box.
                     shell.updates.reach(update::BROKER);
                     broker_up = true;
-                    reader.health(health(&address, broker_up), now())
+                    reader.health(health(&address, wifi_up, broker_up), now())
                 }
                 broker::Event::Disconnected => {
                     light.set(Status::BrokerLost);
                     // So an update arriving now is not asked to get it back.
                     shell.updates.lose(update::BROKER);
                     broker_up = false;
-                    reader.health(health(&address, broker_up), now())
+                    reader.health(health(&address, wifi_up, broker_up), now())
+                }
+                broker::Event::Wifi(up) => {
+                    wifi_up = up;
+                    reader.health(health(&address, wifi_up, broker_up), now())
                 }
                 broker::Event::Message { topic, payload } => {
                     reader.message(&topic, &payload, now())
@@ -564,10 +584,9 @@ fn give_up(
 }
 
 /// What the core is told about the network.
-fn health(address: &str, broker: bool) -> Health {
+fn health(address: &str, wifi: bool, broker: bool) -> Health {
     Health {
-        // `boot()` does not return until Wi-Fi is joined, so by here it is.
-        wifi: true,
+        wifi,
         broker,
         address: Some(address.to_string()),
         // No SNTP yet, deliberately. The platform's tool path is measured on a

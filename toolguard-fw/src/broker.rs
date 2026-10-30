@@ -40,11 +40,17 @@ use spaces_device::wire::topic;
 use spaces_device_espidf::store::key;
 use spaces_device_espidf::Online;
 
-/// What the broker tells the loop about.
+/// What the broker tells the loop about, and Wi-Fi alongside it.
 pub enum Event {
     Connected,
     Disconnected,
-    Message { topic: String, payload: Vec<u8> },
+    Message {
+        topic: String,
+        payload: Vec<u8>,
+    },
+    /// The station joined (`true`) or lost (`false`) its network. Not from the
+    /// broker, but on the same channel so the loop hears about both in order.
+    Wifi(bool),
 }
 
 /// Connect, and forward every event worth acting on into `sender`.

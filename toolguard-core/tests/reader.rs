@@ -809,3 +809,32 @@ fn the_update_guard_is_told_only_on_a_change() {
         "repeated an unchanged state: {again:?}"
     );
 }
+
+#[test]
+fn losing_wifi_says_no_wifi_however_the_broker_loss_follows() {
+    // The broker drops because Wi-Fi did; the panel names the half that is
+    // actually missing, whichever of the two the firmware hears about first.
+    for broker_first in [false, true] {
+        let mut r = reader();
+        let lost = |wifi, broker| Health {
+            wifi,
+            broker,
+            address: Some("192.168.1.50".into()),
+            clock: None,
+        };
+        if broker_first {
+            r.health(lost(true, false), 100);
+            assert_eq!(here(&r).0, "No edge");
+            r.health(lost(false, false), 200);
+        } else {
+            r.health(lost(false, true), 100);
+            r.health(lost(false, false), 200);
+        }
+        assert_eq!(here(&r).0, "No Wi-Fi", "broker first: {broker_first}");
+        // And back: Wi-Fi alone is not enough to take a card.
+        r.health(lost(true, false), 300);
+        assert_eq!(here(&r).0, "No edge");
+        r.health(online(), 400);
+        assert_eq!(here(&r).0, "Present card");
+    }
+}
