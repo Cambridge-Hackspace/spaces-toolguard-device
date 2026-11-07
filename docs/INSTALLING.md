@@ -270,21 +270,21 @@ modes that need them.
 <!-- PINMAP: checked against toolguard-fw/src/main.rs by
      toolguard-core/tests/pinmap.rs. Keep the table shape if you edit it. -->
 
-| signal | esp32c6 | esp32c3 | esp32s3 |
-|---|---|---|---|
-| light | 8 | 8 | 48 |
-| setup | 9 | 9 | 0 |
-| sclk | 0 | 10 | 12 |
-| mosi | 1 | 7 | 11 |
-| miso | 2 | 6 | 13 |
-| cs | 3 | 5 | 10 |
-| rst | 18 | 4 | 14 |
-| sda | 22 | 1 | 4 |
-| scl | 23 | 0 | 5 |
-| sense | 14 | 2 | 15 |
-| relay | 19 | 3 | 16 |
-| stop | 20 | 20 | 17 |
-| strike | 21 | 21 | 18 |
+| signal | esp32c6 | esp32c5 | esp32c3 | esp32s3 |
+|---|---|---|---|---|
+| light | 8 | 27 | 8 | 48 |
+| setup | 9 | 28 | 9 | 0 |
+| sclk | 0 | 6 | 10 | 12 |
+| mosi | 1 | 5 | 7 | 11 |
+| miso | 2 | 4 | 6 | 13 |
+| cs | 3 | 10 | 5 | 10 |
+| rst | 18 | 8 | 4 | 14 |
+| sda | 22 | 23 | 1 | 4 |
+| scl | 23 | 24 | 0 | 5 |
+| sense | 14 | 1 | 2 | 15 |
+| relay | 19 | 9 | 3 | 16 |
+| stop | 20 | 3 | 20 | 17 |
+| strike | 21 | 0 | 21 | 18 |
 
 ### Do not move these on a C6 Super Mini
 
@@ -299,10 +299,32 @@ Freely usable on that board: IO0–IO3, IO14, IO18–IO23. SPI and I²C take sev
 them, which is why sense, relay, stop and strike are 14, 19, 20 and 21 — and
 with all four roles wired a C6 Super Mini has no pin left.
 
+### Do not move these on an ESP32-C5
+
+Compile-only so far: no C5 has run this firmware. The exclusions are from the
+ESP-IDF v5.5.3 GPIO reference, the DevKitC-1 user guide and esptool's boot-mode
+page, not from a bench.
+
+| pin | why |
+|---|---|
+| **GPIO27** | the DevKitC-1's RGB LED *and* a strapping pin that must be high at boot — "GPIO27 = 0 and GPIO28 = 0 is invalid" |
+| **GPIO28** | BOOT (low = download), a strapping pin, and the hold-for-setup gesture |
+| **GPIO13 / GPIO14** | **USB-Serial-JTAG, the console** |
+| **GPIO15–22** | the module's flash and PSRAM; 15 is the PSRAM chip select |
+| **GPIO11 / GPIO12** | UART0 — the DevKitC-1 has a USB-UART bridge on these, so an output there fights the bridge |
+| **GPIO2, 7, 25** | strapping |
+
+Freely usable: IO0, IO1, IO3–IO6, IO8–IO10, IO23, IO24 — eleven, which is exactly
+what the eleven other signals need, so a DevKitC-1 is full like a C6 Super Mini.
+A C5 board with no UART bridge gets GPIO11/12 back. The C5's gains over the C6
+are its 5 GHz radio and that **sense is on GPIO1 = ADC1_CH0**, so this is the one
+pin map on which an analog sense input would be possible.
+
 ### The sensed input is digital, and cannot be analog here
 
 On the ESP32-C6, ADC1 is **GPIO0–GPIO6 only**, and SPI occupies all of those. So
-there is no ADC pin left for a sense input on this pin map. That is no loss for
+there is no ADC pin left for a sense input on the C6 pin map (the C5 map above
+is the exception, and the firmware does not use it yet). That is no loss for
 an optoisolated enable line, which is a logic signal — but it does mean you
 cannot put a current-clamp straight onto this board without an external I²C ADC
 on the existing bus.

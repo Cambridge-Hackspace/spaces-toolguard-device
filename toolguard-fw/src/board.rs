@@ -1,5 +1,5 @@
 //! Which pin is which, per chip, and the two settings that are not the same
-//! on all three.
+//! on all of them.
 //!
 //! Everything chip-specific lives here so the rest of the firmware never names
 //! a GPIO. `spaces-firmware` hardcodes the C6 in five independent places — the
@@ -27,6 +27,28 @@
 //! pin, and ESP-IDF is explicit that below 40 MHz routing through the matrix is
 //! no worse than the IOMUX pins — so at 1 MHz this is a pin-budget question and
 //! not a capability one.
+//!
+//! ## On the ESP32-C5 (#15, compile-only)
+//!
+//! Same family, same triple as the C6, and the reason to want it is the radio:
+//! the C5 does 5 GHz Wi-Fi, which takes a tool box out of the 2.4 GHz band the
+//! Zigbee mesh shares. Its exclusions, from the IDF v5.5.3 GPIO reference, the
+//! DevKitC-1 guide and esptool's boot-mode page:
+//!
+//! - **GPIO27** is the DevKitC-1's RGB LED and must be high at boot; **GPIO28**
+//!   is BOOT (low = download). "GPIO27 = 0 and GPIO28 = 0 is invalid" — the
+//!   C6's GPIO8/GPIO9 rule. They take the light and setup roles for that reason.
+//! - **GPIO13/14** are USB-Serial-JTAG, the console.
+//! - **GPIO15–22** are the module's flash and PSRAM (15 is the PSRAM chip
+//!   select on modules that have it).
+//! - **GPIO11/12** are UART0, and the DevKitC-1 has a USB-UART bridge on them.
+//! - **GPIO2, 7, 25** are strapping.
+//!
+//! Left: 0, 1, 3, 4, 5, 6, 8, 9, 10, 23, 24 — eleven, which is what the eleven
+//! other roles need, so the budget is exactly full on the DevKitC-1 (a board
+//! with no UART bridge gets 11 and 12 back). The gain over the C6 is the band
+//! and that **sense sits on GPIO1 = ADC1_CH0**, so an analog sense input is
+//! possible on this chip where it was not on the C6's map.
 
 //! ## Where the pins actually are
 //!
@@ -80,6 +102,8 @@ pub const SPI_MODE: embedded_hal::spi::Mode = embedded_hal::spi::MODE_3;
 /// The chip this build is for, for the boot banner and the device record.
 pub const CHIP: &str = if cfg!(esp32c6) {
     "esp32c6"
+} else if cfg!(esp32c5) {
+    "esp32c5"
 } else if cfg!(esp32c3) {
     "esp32c3"
 } else if cfg!(esp32s3) {

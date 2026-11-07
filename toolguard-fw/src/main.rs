@@ -134,6 +134,37 @@ fn main() -> anyhow::Result<()> {
         pins.gpio21,
     );
 
+    // UNTESTED: no C5 here, so this compiles and nothing more (#15). The C5's
+    // strapping pair is 27 and 28 -- "GPIO27 = 0 and GPIO28 = 0 is invalid",
+    // the C6's GPIO8/GPIO9 rule under new numbers -- and on the DevKitC-1
+    // GPIO27 is the RGB LED and GPIO28 is BOOT, so they take the same two
+    // roles they do on the C6. USB is 13/14, UART0 is 11/12 (and the DevKitC-1
+    // has a USB-UART bridge on those, so an output there fights the bridge),
+    // and 15-22 are the module's flash and PSRAM. What is left is exactly the
+    // eleven pins the other roles need: 0, 1, 3, 4, 5, 6, 8, 9, 10, 23, 24.
+    //
+    // sense is GPIO1 on purpose: ADC1_CH0. This is the first board on which
+    // the sensed input COULD be analog; it is digital today, like the others.
+    // stop is GPIO3 (MTDI) because the DevKit guide calls it a strapping pin
+    // and the IDF GPIO page does not -- an input on a pull-up never fights a
+    // strap, so the doubt lands on the input and not on an output.
+    #[cfg(esp32c5)]
+    let (light_pin, setup_pin, sclk, mosi, miso, cs, rst, sda, scl, sense, relay, stop, strike) = (
+        pins.gpio27,
+        pins.gpio28,
+        pins.gpio6,
+        pins.gpio5,
+        pins.gpio4,
+        pins.gpio10,
+        pins.gpio8,
+        pins.gpio23,
+        pins.gpio24,
+        pins.gpio1,
+        pins.gpio9,
+        pins.gpio3,
+        pins.gpio0,
+    );
+
     // UNTESTED: no S3 here. Its addressable LED is on GPIO48 on the boards that
     // have one, flash and PSRAM occupy 26-32, and USB is 19/20 -- so this stays
     // clear of all of them. GPIO9 is kept for BOOT for consistency with the

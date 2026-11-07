@@ -11,9 +11,9 @@ A door, a tool and a room are the same resource with different bindings (CS:S
 #182), and this box speaks the resource-shaped local wire.
 
 > Work in progress. The protocol core and the display model are host-tested; the
-> firmware compiles for all three chips in CI. **No board has run any of it** —
-> the pin maps for the C3 and S3 in particular compile and nothing more, since
-> neither board exists here yet.
+> firmware compiles for all four chips in CI. **No board has run any of it** —
+> the pin maps for the C5, C3 and S3 in particular compile and nothing more,
+> since none of those boards exists here yet.
 
 ## What it is, and is not
 
@@ -70,15 +70,21 @@ The core is plain Rust and runs anywhere. `--target` is required because
 cargo test -p toolguard-core --target x86_64-unknown-linux-gnu
 ```
 
-The firmware needs `cargo install ldproxy` and, for the two RISC-V chips, the
+The firmware needs `cargo install ldproxy` and, for the RISC-V chips, the
 nightly pinned in `rust-toolchain.toml`. **`MCU` is not optional** — a target
-triple alone is ambiguous (`riscv32imc-esp-espidf` maps to the C3, C2, H2 *and*
-C5, and esp-idf-sys picks the first it supports, warning as it goes):
+triple alone is ambiguous (`riscv32imc-esp-espidf` maps to the C3, C2 and H2;
+`riscv32imac-esp-espidf` to the C6 *and* the C5, so a C5 build is told apart
+from a C6 build by `MCU` alone; esp-idf-sys picks the first it supports,
+warning as it goes):
 
 ```sh
 MCU=esp32c6 cargo build --release --target riscv32imac-esp-espidf
+MCU=esp32c5 cargo build --release --target riscv32imac-esp-espidf
 MCU=esp32c3 cargo build --release --target riscv32imc-esp-espidf
 ```
+
+The C5 is there for its radio: it is the only one of the four with 5 GHz Wi-Fi,
+which takes a tool box out of the 2.4 GHz band the Zigbee mesh shares (#15).
 
 The **S3 is Xtensa**, which upstream rustc cannot target at all, so it needs
 Espressif's compiler fork via espup — pin `0.17.1`, since `0.18.0` is yanked:
@@ -90,9 +96,10 @@ espup install --targets esp32s3 --std
 MCU=esp32s3 cargo +esp build --release --target xtensa-esp32s3-espidf
 ```
 
-That combination is measured rather than assumed: CI builds all three, and the
+That combination is measured rather than assumed: CI builds all four, and the
 `esp` channel does serve the Xtensa target while `rust-toolchain.toml` keeps the
-RISC-V pair on plain nightly, so the C6 and C3 do not pay for a forked compiler.
+RISC-V chips on plain nightly, so the C6, C5 and C3 do not pay for a forked
+compiler.
 
 ## Wiring
 
