@@ -34,7 +34,7 @@ i2c-character-display = "0.6"
 embuild.workspace = true
 
 # THE CHIP cfgs ARE DECLARED, NOT SILENCED. esp-idf-sys sets `esp32c6`,
-# `esp32c3` and `esp32s3` from the MCU it was built for, and since Cargo 1.80
+# `esp32c5`, `esp32c3` and `esp32s3` from the MCU it was built for, and since Cargo 1.80
 # an undeclared cfg name is `unexpected_cfgs` -- an ERROR here because CI runs
 # clippy with -D warnings.
 #
@@ -45,6 +45,7 @@ embuild.workspace = true
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(esp32c6)',
+    'cfg(esp32c5)',
     'cfg(esp32c3)',
     'cfg(esp32s3)',
 ] }

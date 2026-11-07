@@ -1,12 +1,15 @@
 # THE CHIP IS CHOSEN IN TWO PLACES AND BOTH MUST AGREE: the target triple and
-# MCU. A triple is not enough -- `riscv32imc-esp-espidf` maps to esp32c3, c2, h2
-# AND c5, and esp-idf-sys picks the FIRST it supports, warning as it goes. So a
-# build with the wrong MCU is a build for a different chip that mostly works.
+# MCU. A triple is not enough -- `riscv32imc-esp-espidf` maps to esp32c3, c2
+# and h2, and `riscv32imac-esp-espidf` to esp32c6 AND esp32c5 (embuild's table,
+# pio.rs) -- and esp-idf-sys picks the FIRST it supports, warning as it goes.
+# So a build with the wrong MCU is a build for a different chip that mostly
+# works, and for the C5 the triple alone says NOTHING: it is the C6's.
 #
 # Default here is the C6, the board in hand. The others are driven from the
-# environment, which `scripts/build.sh` does:
+# environment, which CI's matrix does per chip:
 #
 #   esp32c6  riscv32imac-esp-espidf
+#   esp32c5  riscv32imac-esp-espidf    <- same triple as the C6; MCU decides
 #   esp32c3  riscv32imc-esp-espidf
 #   esp32s3  xtensa-esp32s3-espidf    <- Xtensa: needs espup's `esp` toolchain
 #

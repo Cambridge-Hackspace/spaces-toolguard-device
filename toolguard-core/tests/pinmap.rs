@@ -19,7 +19,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-const CHIPS: [&str; 3] = ["esp32c6", "esp32c3", "esp32s3"];
+const CHIPS: [&str; 4] = ["esp32c6", "esp32c5", "esp32c3", "esp32s3"];
 
 fn repo_root() -> PathBuf {
     // CARGO_MANIFEST_DIR is this package; the repository is its parent.
@@ -182,10 +182,10 @@ fn the_parsers_report_only_what_they_are_given() {
     let doc = "\
 <!-- PINMAP: x -->
 
-| signal | esp32c6 | esp32c3 | esp32s3 |
-|---|---|---|---|
-| light | 8 | 7 | 48 |
-| relay | 19 | 3 | 16 |
+| signal | esp32c6 | esp32c5 | esp32c3 | esp32s3 |
+|---|---|---|---|---|
+| light | 8 | 27 | 7 | 48 |
+| relay | 19 | 9 | 3 | 16 |
 ";
     let c6 = from_doc(doc, "esp32c6");
     assert_eq!(c6.get("light"), Some(&8));
@@ -198,6 +198,10 @@ fn the_parsers_report_only_what_they_are_given() {
         "the column lookup is not per chip"
     );
     assert_eq!(from_doc(doc, "esp32s3").get("light"), Some(&48));
+    // A column inserted in the MIDDLE of the table must not shift its
+    // neighbours: the C5 went in between the C6 and the C3.
+    assert_eq!(from_doc(doc, "esp32c5").get("light"), Some(&27));
+    assert_eq!(from_doc(doc, "esp32c5").get("relay"), Some(&9));
 }
 
 /// And a transposed pin must fail, which is the defect this exists for.

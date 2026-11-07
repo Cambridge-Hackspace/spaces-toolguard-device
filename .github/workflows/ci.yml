@@ -26,11 +26,12 @@ jobs:
 
   # THE RISC-V CHIPS, on upstream nightly. rust-toolchain.toml pins the date.
   #
-  # Both are built because nothing may silently hardcode the C6: the board in
-  # hand is a C6, so a C3 assumption would go unnoticed until somebody picks up
-  # the other board. MCU is set per chip and is NOT optional -- a triple alone
-  # is ambiguous (riscv32imc maps to c3, c2, h2 and c5) and esp-idf-sys picks
-  # the first it supports.
+  # All of them are built because nothing may silently hardcode the C6: the
+  # board in hand is a C6, so a C3 or C5 assumption would go unnoticed until
+  # somebody picks up another board. MCU is set per chip and is NOT optional --
+  # a triple alone is ambiguous (riscv32imc maps to c3, c2 and h2; riscv32imac
+  # to c6 AND c5) and esp-idf-sys picks the first it supports. For the C5 the
+  # triple is the C6's, so MCU is the only thing that makes this a C5 build.
   riscv:
     name: Firmware (${{ matrix.mcu }})
     runs-on: ubuntu-24.04
@@ -39,6 +40,8 @@ jobs:
       matrix:
         include:
           - mcu: esp32c6
+            target: riscv32imac-esp-espidf
+          - mcu: esp32c5
             target: riscv32imac-esp-espidf
           - mcu: esp32c3
             target: riscv32imc-esp-espidf

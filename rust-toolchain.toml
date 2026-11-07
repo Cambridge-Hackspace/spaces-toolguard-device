@@ -1,5 +1,5 @@
-# Upstream nightly, which covers the two RISC-V chips: the C6
-# (riscv32imac-esp-espidf) and the C3 (riscv32imc-esp-espidf). Nightly is
+# Upstream nightly, which covers the RISC-V chips: the C6 and C5
+# (riscv32imac-esp-espidf, both) and the C3 (riscv32imc-esp-espidf). Nightly is
 # required only because the target's standard library is built from source
 # (`build-std` in .cargo/config.toml), not for any language feature.
 #
