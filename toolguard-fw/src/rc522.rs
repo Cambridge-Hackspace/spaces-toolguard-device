@@ -2,13 +2,19 @@
 //!
 //! ## Provenance
 //!
-//! Adapted from `Cambridge-Hackspace/nfc-522`'s `src/nfc.rs` by
-//! gmorell <gmp@gmp.io>, which is **GPL-3.0**. This file is therefore the one
-//! place in this AGPL-3.0-or-later repository with a second copyright; AGPLv3
-//! §13 permits the combination, and the GPL-licensed portion keeps its own
-//! terms. What is taken is the shape rather than the text: probe by version
-//! register, REQA/HLTA to make a resting card read once, and a same-UID
-//! cooldown.
+//! **[`Reader::poll`] is derived from `Cambridge-Hackspace/nfc-522`**, its
+//! `src/nfc.rs` `Reader::poll`: the REQA, SELECT, HLTA, STOP-CRYPTO1 sequence
+//! and the two comments explaining it are close paraphrases of that code.
+//! That portion is Copyright 2026 gmorell <gmp@gmp.io> and licensed
+//! **GPL-3.0** (nfc-522's `LICENSE.md`); it is combined here with
+//! AGPL-3.0-or-later code, as AGPLv3 §13 permits, and keeps its own terms.
+//! This is the one place in this repository with a second copyright.
+//!
+//! The rest of this file is this repository's own, AGPL-3.0-or-later: the
+//! bring-up in [`start`], the mode-3 SPI configuration, the version-register
+//! checks and their diagnostics, and `to_hex`. Two ideas come from nfc-522
+//! without its text -- probing by the version register, and a same-UID
+//! cooldown (which lives in the core here, see below).
 //!
 //! That firmware is a good hardware reference and not a protocol one — it
 //! publishes to `{topic_root}/scans/<channel>` and speaks no `toolguard/*` at

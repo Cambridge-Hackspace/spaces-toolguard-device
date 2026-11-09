@@ -153,7 +153,10 @@ Two electrical notes worth having before wiring anything:
 ## License
 
 The firmware is [AGPL-3.0-or-later](LICENSE), matching the platform and
-`spaces-firmware`.
+`spaces-firmware`. One portion has a second copyright: `Reader::poll` in
+`toolguard-fw/src/rc522.rs` is derived from
+[`nfc-522`](https://github.com/Cambridge-Hackspace/nfc-522) and is GPL-3.0;
+that file's header says exactly what.
 
 The hardware, everything under [`hardware/`](hardware/), is
 [CERN-OHL-S-2.0](hardware/LICENSE), the strongly reciprocal CERN Open Hardware
