@@ -35,7 +35,7 @@ included, which goes through this firmware, a lease and a Wi-Fi link.
 
 | Path | What it is |
 |---|---|
-| `toolguard-core/` | the glue over `spaces_device::Module`, the display model and the stop-button debouncer: no hardware, no I/O, host-tested |
+| `toolguard-core/` | the box as a `spaces_device::Device`: the glue over `spaces_device::Module`, the display model, and how usage is sensed. No hardware, no I/O, host-tested |
 | `toolguard-fw/` | the ESP-IDF firmware: RC522 over SPI, 1602 over I2C, three chips |
 
 The protocol is not redefined here. `Module`, the topics and the wire types come

@@ -29,6 +29,7 @@ use std::time::Duration;
 use esp_idf_svc::hal::gpio::{Input, InputPin, InterruptType, Output, PinDriver, Pull};
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
+use spaces_device::input::Debounced;
 use spaces_device_espidf::run::Event;
 use spaces_device_espidf::status_light::{Status, StatusLight};
 use spaces_device_espidf::store::{key, Field, Store};
@@ -36,7 +37,7 @@ use spaces_device_espidf::update::Updates;
 use spaces_device_espidf::{boot, watch_setup_button, weblog, Firmware};
 use toolguard_core::screen::Screen;
 use toolguard_core::sense::{Powered, Reading, Source};
-use toolguard_core::{Action, Reader, StopButton};
+use toolguard_core::{Action, Reader};
 
 mod board;
 mod lcd;
@@ -49,9 +50,6 @@ mod settings;
 /// person moving at human speed is never missed, slow enough that the SPI bus
 /// is mostly idle.
 const POLL_MS: u64 = 75;
-/// How long the stop button must stay closed before a press counts. Longer than
-/// any mechanical bounce, shorter than anyone would call a hold.
-const STOP_DEBOUNCE_MS: u64 = 50;
 
 /// This device reads cards. It switches nothing.
 ///
@@ -461,7 +459,7 @@ fn main() -> anyhow::Result<()> {
         powered,
         powered_active_low,
         stop,
-        stop_button: StopButton::new(STOP_DEBOUNCE_MS),
+        stop_button: Debounced::button(),
     };
     // Returns only if the broker client cannot be set up -- the usual cause is
     // an address it cannot parse -- and that is fatal like the others: not a
@@ -493,7 +491,10 @@ struct Hardware<'d> {
     powered: Option<PinDriver<'d, Input>>,
     powered_active_low: bool,
     stop: Option<PinDriver<'d, Input>>,
-    stop_button: StopButton,
+    /// spaces-device's debouncer, the one every device uses: a press counts
+    /// once the contact has settled, and holds long enough that no bounce or
+    /// lingering finger is a second press.
+    stop_button: Debounced,
 }
 
 impl spaces_device_espidf::run::Hardware<Reader> for Hardware<'_> {
@@ -583,7 +584,7 @@ impl spaces_device_espidf::run::Hardware<Reader> for Hardware<'_> {
         // Then the stop button, which anyone may press. One stop per press,
         // however long the finger stays; the core turns the bounce into that.
         if let Some(pin) = self.stop.as_mut() {
-            if self.stop_button.sample(pin.is_low(), now) {
+            if self.stop_button.sample(now, pin.is_low()) == Some(true) {
                 inputs.push(toolguard_core::Input::Stop);
             }
         }
