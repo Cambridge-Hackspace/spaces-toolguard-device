@@ -40,6 +40,7 @@ use toolguard_core::sense::{Powered, Reading, Source};
 use toolguard_core::{Action, Reader};
 
 mod board;
+mod bus;
 mod lcd;
 mod rc522;
 mod settings;
@@ -88,8 +89,14 @@ fn main() -> anyhow::Result<()> {
     // The reasoning per pin is in the board's file; the traps per chip are in
     // `board`.
     let pins = peripherals.pins;
-    let (light_pin, setup_pin, sclk, mosi, miso, cs, rst, sda, scl, sense, relay, stop, strike) =
-        board_pins!(pins);
+    let (light_pin, setup_pin, sda, scl, sense, relay, stop, strike) = board_pins!(pins);
+    // A board without these has its reader on I2C (#23), and its RST tied high.
+    #[cfg(board_has_spi)]
+    let (sclk, mosi, miso, cs) = board_spi!(pins);
+    #[cfg(board_has_rst)]
+    let rst = Some(board_rst!(pins));
+    #[cfg(not(board_has_rst))]
+    let rst: Option<esp_idf_svc::hal::gpio::AnyOutputPin> = None;
     #[cfg(board_has_powered)]
     let powered = board_powered!(pins);
 
@@ -116,7 +123,7 @@ fn main() -> anyhow::Result<()> {
 
     // Not on the critical path: `start` is infallible and degrades to a no-op,
     // because a reader with a dead LED should still read cards.
-    let light = StatusLight::start(light_pin, Status::Connecting);
+    let light = StatusLight::start_led(light_pin, board::LED, Status::Connecting);
     // Early, so an image on probation is watched from the first moment rather
     // than from whenever the loop happens to start.
     let updates = Updates::start(
@@ -186,23 +193,51 @@ fn main() -> anyhow::Result<()> {
 
     // --- the two peripherals ------------------------------------------------
     //
-    // The panel first, so a reader fault has somewhere to be displayed.
-    let mut panel = match lcd::start(peripherals.i2c0, sda, scl, board::LCD_ADDRESSES) {
-        Ok(p) => Some(p),
+    // One I2C bus, shared: the panel, a converted reader, later the joystick.
+    let bus = match bus::start(peripherals.i2c0, sda, scl) {
+        Ok(b) => Some(b),
         Err(e) => {
+            log::error!("no I2C bus: {e:#}");
+            None
+        }
+    };
+
+    // The panel first, so a reader fault has somewhere to be displayed.
+    let lcd_addresses = board::LCD_I2C.unwrap_or(board::LCD_ADDRESSES);
+    let (mut panel, lcd_at) = match bus.map(|b| lcd::start(b, lcd_addresses)) {
+        Some(Ok((p, found))) => (Some(p), Some(found.address)),
+        Some(Err(e)) => {
             // Degraded, not broken: the reader can still authorize a member,
             // who sees the result on the machine rather than on a display. So
             // it complains and carries on.
             log::error!("no panel: {e:#}");
-            None
+            (None, None)
         }
+        None => (None, None),
     };
 
     // Only when this box is supposed to have one. A plug has no antenna and
     // failing on its absence would make the one configuration that needs no
     // reader impossible to run.
+    //
+    // I2C first, then SPI (#23): a converted reader is found on the bus by its
+    // version register, never at the LCD's address; with none there, a board
+    // that routes SPI tries the reader the blue boards ship as. The same image
+    // runs either way.
     let card_reader = if settings.config.reads_cards {
-        match rc522::start(peripherals.spi2, sclk, mosi, miso, cs, rst) {
+        let avoid: Vec<u8> = lcd_at.into_iter().collect();
+        let on_i2c = bus.and_then(|b| rc522::start_i2c(b, board::READER_I2C, &avoid));
+        #[cfg(board_has_spi)]
+        let found =
+            on_i2c.unwrap_or_else(|| rc522::start_spi(peripherals.spi2, sclk, mosi, miso, cs, rst));
+        #[cfg(not(board_has_spi))]
+        let found = on_i2c.unwrap_or_else(|| {
+            drop(rst);
+            Err(anyhow::anyhow!(
+                "no MFRC522 answered on I2C, and this board has no SPI reader pins"
+            ))
+        });
+        match found {
             Ok(r) => Some(r),
             Err(e) => {
                 // On a box that should have read cards, no antenna is the
@@ -281,9 +316,11 @@ fn main() -> anyhow::Result<()> {
         None
     };
 
-    // The stop button: a momentary switch to GND, so the pull-up makes an
-    // unconnected or open contact read "not pressed". Debounced in the core;
-    // the pin is just sampled.
+    // The stop button: a switch to GND on the pull-up. Normally open, an
+    // unconnected or open contact reads "not pressed"; normally closed (as the
+    // carrier wires it, `board::STOP_NORMALLY_CLOSED`), it rests low and a
+    // press -- or a cut wire -- reads high, so a broken stop circuit stops.
+    // Debounced in the core; the pin is just sampled.
     let stop = if settings.stop_button {
         match PinDriver::input(stop, Pull::Up) {
             Ok(p) => Some(p),
@@ -346,7 +383,7 @@ fn main() -> anyhow::Result<()> {
 /// The box's hardware: what the core's decisions are carried out on, and the
 /// inputs read on the loop's own thread.
 struct Hardware<'d> {
-    panel: Rc<RefCell<Option<lcd::Panel<'d>>>>,
+    panel: Rc<RefCell<Option<lcd::Panel>>>,
     relay: Option<PinDriver<'d, Output>>,
     strike: Option<PinDriver<'d, Output>>,
     card_reader: Option<rc522::Reader<'d>>,
@@ -453,7 +490,14 @@ impl spaces_device_espidf::run::Hardware<Reader> for Hardware<'_> {
         // Then the stop button, which anyone may press. One stop per press,
         // however long the finger stays; the core turns the bounce into that.
         if let Some(pin) = self.stop.as_mut() {
-            if self.stop_button.sample(now, pin.is_low()) == Some(true) {
+            // Pressed is low on a normally-open button to ground, and high on
+            // a normally-closed one, where a cut wire reads as pressed too.
+            let pressed = if board::STOP_NORMALLY_CLOSED {
+                pin.is_high()
+            } else {
+                pin.is_low()
+            };
+            if self.stop_button.sample(now, pressed) == Some(true) {
                 inputs.push(toolguard_core::Input::Stop);
             }
         }
@@ -471,7 +515,7 @@ impl spaces_device_espidf::run::Hardware<Reader> for Hardware<'_> {
 fn give_up(
     why: &anyhow::Error,
     light: &StatusLight,
-    panel: Option<(&mut lcd::Panel<'_>, Screen)>,
+    panel: Option<(&mut lcd::Panel, Screen)>,
 ) -> ! {
     log::error!("{why:#}");
     if let Some((p, screen)) = panel {

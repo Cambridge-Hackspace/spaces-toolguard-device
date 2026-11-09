@@ -22,19 +22,25 @@ use std::path::PathBuf;
 
 /// Every board, as `(board, chip)`. Kept in step with `BOARDS` in build.rs by
 /// [`every_board_file_is_listed_and_every_listed_board_has_a_file`].
-const BOARDS: [(&str, &str); 4] = [
+const BOARDS: [(&str, &str); 5] = [
     ("c6-supermini", "esp32c6"),
+    ("c5-xiao-carrier", "esp32c5"),
     ("c5-devkitc1", "esp32c5"),
     ("c3-supermini", "esp32c3"),
     ("s3-devkitc1", "esp32s3"),
 ];
 
 /// The roles every board has, as build.rs requires them.
-const REQUIRED: [&str; 13] = [
-    "light", "setup", "sclk", "mosi", "miso", "cs", "rst", "sda", "scl", "sense", "relay", "stop",
-    "strike",
+const REQUIRED: [&str; 8] = [
+    "light", "setup", "sda", "scl", "sense", "relay", "stop", "strike",
 ];
-const OPTIONAL: [&str; 1] = ["powered"];
+/// The groups a board may have, all of a group or none of it, as build.rs
+/// requires them.
+const GROUPS: [(&str, &[&str]); 3] = [
+    ("spi", &["sclk", "mosi", "miso", "cs"]),
+    ("rst", &["rst"]),
+    ("powered", &["powered"]),
+];
 
 fn repo_root() -> PathBuf {
     // CARGO_MANIFEST_DIR is this package; the repository is its parent.
@@ -162,8 +168,18 @@ fn every_board_file_is_complete_and_names_each_gpio_once() {
         }
         for role in b.pins.keys() {
             assert!(
-                REQUIRED.contains(&role.as_str()) || OPTIONAL.contains(&role.as_str()),
+                REQUIRED.contains(&role.as_str())
+                    || GROUPS
+                        .iter()
+                        .any(|(_, roles)| roles.contains(&role.as_str())),
                 "{name}: `{role}` is not a role the firmware has"
+            );
+        }
+        for (group, roles) in GROUPS {
+            let present = roles.iter().filter(|r| b.pins.contains_key(**r)).count();
+            assert!(
+                present == 0 || present == roles.len(),
+                "{name}: the `{group}` pins are all or none of {roles:?}"
             );
         }
         let mut seen: BTreeMap<u32, &str> = BTreeMap::new();
@@ -304,6 +320,36 @@ fn switching_outputs_avoid_pins_driven_or_pulled_high_at_boot() {
                      pulled high before the firmware runs -- it would switch on at boot"
                 );
             }
+        }
+    }
+}
+
+/// Where a board puts its I2C parts must not overlap (#23). The reader is
+/// found by writing its version register's number to each candidate address;
+/// at an LCD backpack's address that byte would land on the PCF8574's port.
+/// The firmware also never probes the address the LCD was found at, but a
+/// board file that lists the same address for both is wrong on its face.
+#[test]
+fn a_boards_reader_and_lcd_addresses_do_not_overlap() {
+    for (name, _) in BOARDS {
+        let file: toml::Table = read(&format!("toolguard-fw/boards/{name}.toml"))
+            .parse()
+            .expect("valid TOML");
+        let Some(i2c) = file.get("i2c").and_then(|v| v.as_table()) else {
+            continue;
+        };
+        let list = |key: &str| -> Vec<i64> {
+            i2c.get(key)
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|x| x.as_integer()).collect())
+                .unwrap_or_default()
+        };
+        let lcd = list("lcd");
+        for a in list("reader") {
+            assert!(
+                !lcd.contains(&a),
+                "{name}: {a:#04x} is listed for both the reader and the LCD"
+            );
         }
     }
 }

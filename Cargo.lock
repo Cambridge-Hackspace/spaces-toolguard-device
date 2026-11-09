@@ -430,6 +430,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-hal-bus"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "513e0b3a8fb7d3013a8ae17a834283f170deaf7d0eeab0a7c1a36ad4dd356d22"
+dependencies = [
+ "critical-section",
+ "embedded-hal 1.0.0",
+]
+
+[[package]]
 name = "embedded-hal-nb"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1266,18 +1276,19 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "spaces-device"
-version = "0.8.0"
-source = "git+https://github.com/Cambridge-Hackspace/spaces-firmware?tag=v0.8.0#b2050cc785fa36e030e1bb8fe6a6bb16b27cdf30"
+version = "0.9.0"
+source = "git+https://github.com/Cambridge-Hackspace/spaces-firmware?tag=v0.9.0#23d45132dc8d19e0eeb134839414e1a32fcaaab0"
 dependencies = [
  "css_wire",
+ "embedded-hal 1.0.0",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "spaces-device-espidf"
-version = "0.8.0"
-source = "git+https://github.com/Cambridge-Hackspace/spaces-firmware?tag=v0.8.0#b2050cc785fa36e030e1bb8fe6a6bb16b27cdf30"
+version = "0.9.0"
+source = "git+https://github.com/Cambridge-Hackspace/spaces-firmware?tag=v0.9.0#23d45132dc8d19e0eeb134839414e1a32fcaaab0"
 dependencies = [
  "anyhow",
  "embedded-svc",
@@ -1511,6 +1522,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "embedded-hal 1.0.0",
+ "embedded-hal-bus",
  "embuild",
  "esp-idf-svc",
  "i2c-character-display",

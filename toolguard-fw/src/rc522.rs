@@ -1,17 +1,19 @@
-//! The MFRC522 front end: probe it, then poll it for card UIDs.
+//! The MFRC522 front end: find it, on SPI or converted to I2C (#23), then poll
+//! it for card UIDs.
 //!
 //! ## Provenance
 //!
-//! **[`Reader::poll`] is derived from `Cambridge-Hackspace/nfc-522`**, its
-//! `src/nfc.rs` `Reader::poll`: the REQA, SELECT, HLTA, STOP-CRYPTO1 sequence
-//! and the two comments explaining it are close paraphrases of that code.
+//! **`poll_card` (behind [`Reader::poll`]) is derived from
+//! `Cambridge-Hackspace/nfc-522`**, its `src/nfc.rs` `Reader::poll`: the
+//! REQA, SELECT, HLTA, STOP-CRYPTO1 sequence and the two comments explaining
+//! it are close paraphrases of that code.
 //! That portion is Copyright 2026 gmorell <gmp@gmp.io> and licensed
 //! **GPL-3.0** (nfc-522's `LICENSE.md`); it is combined here with
 //! AGPL-3.0-or-later code, as AGPLv3 §13 permits, and keeps its own terms.
 //! This is the one place in this repository with a second copyright.
 //!
 //! The rest of this file is this repository's own, AGPL-3.0-or-later: the
-//! bring-up in [`start`], the mode-3 SPI configuration, the version-register
+//! bring-up in [`start_spi`] and [`start_i2c`], the mode-3 SPI configuration, the version-register
 //! checks and their diagnostics, and `to_hex`. Two ideas come from nfc-522
 //! without its text -- probing by the version register, and a same-UID
 //! cooldown (which lives in the core here, see below).
@@ -39,40 +41,84 @@ use esp_idf_svc::hal::gpio::{InputPin, Output, OutputPin, PinDriver};
 use esp_idf_svc::hal::spi::config::{Config as SpiConfig, DriverConfig};
 use esp_idf_svc::hal::spi::{SpiAnyPins, SpiDeviceDriver, SpiDriver};
 use esp_idf_svc::hal::units::Hertz;
+use mfrc522::comm::blocking::i2c::I2cInterface;
 use mfrc522::comm::blocking::spi::{DummyDelay, SpiInterface};
+use mfrc522::comm::Interface;
 use mfrc522::{Initialized, Mfrc522};
+use spaces_device::i2c::{self, Found};
 
 use crate::board;
+use crate::bus::{self, Bus, Device};
 
-/// A reader that has answered with a plausible version byte.
-pub struct Reader<'d> {
-    mfrc522: Mfrc522<SpiInterface<SpiDeviceDriver<'d, SpiDriver<'d>>, DummyDelay>, Initialized>,
-    /// Held for the program's lifetime: dropping it would let RST fall and put
-    /// the module back into power-down.
-    ///
-    /// `PinDriver<'d, MODE>` carries only the mode in esp-idf-hal 0.47 -- the
-    /// pin type is erased by the constructor -- so this needs no generic for
-    /// which pin it is.
-    _rst: PinDriver<'d, Output>,
+/// A reader that has answered with a plausible version byte, on whichever bus
+/// it was found on.
+pub enum Reader<'d> {
+    /// An RC522 as the blue boards ship.
+    Spi {
+        mfrc522: Mfrc522<SpiInterface<SpiDeviceDriver<'d, SpiDriver<'d>>, DummyDelay>, Initialized>,
+        /// Held for the program's lifetime, when the board has the pin:
+        /// dropping it would let RST fall and put the module back into
+        /// power-down. A board that ties RST to 3.3 V has none.
+        ///
+        /// `PinDriver<'d, MODE>` carries only the mode in esp-idf-hal 0.47 --
+        /// the pin type is erased by the constructor -- so this needs no
+        /// generic for which pin it is.
+        _rst: Option<PinDriver<'d, Output>>,
+    },
+    /// An RC522 converted to I2C (#23), on the shared bus.
+    I2c {
+        mfrc522: Mfrc522<I2cInterface<Device>, Initialized>,
+    },
 }
 
 impl Reader<'_> {
     /// Poll once. `Some(uid)` only for a card that has just entered the field.
-    ///
-    /// REQA is answered only by cards in IDLE, so a card that was read and then
-    /// halted stays silent until it leaves and comes back. That is what makes a
-    /// card resting on the reader one event rather than a stream of them — the
-    /// policy-level cooldown in the core is the second guard, for a tap that
-    /// bounces.
     pub fn poll(&mut self) -> Option<String> {
-        let atqa = self.mfrc522.reqa().ok()?;
-        let uid = self.mfrc522.select(&atqa).ok()?;
-        // Halt it and drop any crypto state, so the next presentation is a new
-        // detection rather than a continuation.
-        let _ = self.mfrc522.hlta();
-        let _ = self.mfrc522.stop_crypto1();
-        Some(to_hex(uid.as_bytes()))
+        match self {
+            Reader::Spi { mfrc522, .. } => poll_card(mfrc522),
+            Reader::I2c { mfrc522 } => poll_card(mfrc522),
+        }
     }
+}
+
+/// One poll of the antenna, on either bus.
+///
+/// REQA is answered only by cards in IDLE, so a card that was read and then
+/// halted stays silent until it leaves and comes back. That is what makes a
+/// card resting on the reader one event rather than a stream of them — the
+/// policy-level cooldown in the core is the second guard, for a tap that
+/// bounces.
+fn poll_card<C: Interface>(mfrc522: &mut Mfrc522<C, Initialized>) -> Option<String> {
+    let atqa = mfrc522.reqa().ok()?;
+    let uid = mfrc522.select(&atqa).ok()?;
+    // Halt it and drop any crypto state, so the next presentation is a new
+    // detection rather than a continuation.
+    let _ = mfrc522.hlta();
+    let _ = mfrc522.stop_crypto1();
+    Some(to_hex(uid.as_bytes()))
+}
+
+/// Look for a converted RC522 on the shared bus (#23): at `at` when the board
+/// says where, or wherever the part can be, and never at an address in
+/// `avoid` (the LCD's, so a register pointer is never written to its port).
+///
+/// `None` when nothing answered as one, which is the usual case on a board
+/// whose reader is on SPI; `Some(Err)` when one answered and then failed.
+pub fn start_i2c(
+    bus: &'static Bus,
+    at: Option<&[u8]>,
+    avoid: &[u8],
+) -> Option<anyhow::Result<Reader<'static>>> {
+    let found: Found = i2c::find(&mut bus::device(bus), &i2c::MFRC522, at, avoid)?;
+    log::info!("card reader: {found}");
+    let started = Mfrc522::new(I2cInterface::new(bus::device(bus), found.address))
+        .init()
+        .map_err(|e| anyhow::anyhow!("MFRC522 init over I2C failed: {e:?}"))
+        .and_then(|mut mfrc522| {
+            check_version(&mut mfrc522)?;
+            Ok(Reader::I2c { mfrc522 })
+        });
+    Some(started)
 }
 
 /// Bring up the SPI bus and the reader on it, or say why not.
@@ -81,19 +127,25 @@ impl Reader<'_> {
 /// cannot be reached is the whole function of this device missing, and the
 /// caller shows it on the panel instead of idling as though it were waiting for
 /// a card.
-pub fn start<'d, SPI: SpiAnyPins + 'd>(
+pub fn start_spi<'d, SPI: SpiAnyPins + 'd>(
     spi: SPI,
     sclk: impl OutputPin + 'd,
     mosi: impl OutputPin + 'd,
     miso: impl InputPin + 'd,
     cs: impl OutputPin + 'd,
-    rst: impl OutputPin + 'd,
+    rst: Option<impl OutputPin + 'd>,
 ) -> anyhow::Result<Reader<'d>> {
     // RST high FIRST and kept: the MFRC522 is in power-down until it is, and a
     // bus brought up against a sleeping chip reads zeros that look like a wiring
     // fault.
-    let mut rst = PinDriver::output(rst).context("RC522 reset pin")?;
-    rst.set_high().context("RC522 reset high")?;
+    let rst = match rst {
+        Some(pin) => {
+            let mut rst = PinDriver::output(pin).context("RC522 reset pin")?;
+            rst.set_high().context("RC522 reset high")?;
+            Some(rst)
+        }
+        None => None,
+    };
 
     let driver = SpiDriver::new(spi, sclk, mosi, Some(miso), &DriverConfig::new())
         .context("SPI bus for the RC522")?;
@@ -109,17 +161,29 @@ pub fn start<'d, SPI: SpiAnyPins + 'd>(
     let mut mfrc522 = Mfrc522::new(SpiInterface::new(device))
         .init()
         .map_err(|e| anyhow::anyhow!("MFRC522 init failed: {e:?}"))?;
+    check_version(&mut mfrc522)?;
 
-    // THE ORACLE FOR THE WHOLE SPI PATH, and it is cheap. `VersionReg` is the
-    // exact register the S3 mode-0 bug corrupts: a correct bus reads 0x91 or
-    // 0x92, and a wrongly-sampled one reads 0x6e or similar. Checking it here
-    // turns "the reader never sees a card" -- which looks like an antenna, a
-    // wiring or a card problem -- into one line at boot naming the bus.
+    Ok(Reader::Spi { mfrc522, _rst: rst })
+}
+
+/// THE ORACLE FOR THE WHOLE BUS PATH, and it is cheap. `VersionReg` is the
+/// exact register the S3 mode-0 bug corrupts: a correct bus reads 0x91 or
+/// 0x92, and a wrongly-sampled one reads 0x6e or similar. Checking it here
+/// turns "the reader never sees a card" -- which looks like an antenna, a
+/// wiring or a card problem -- into one line at boot naming the bus.
+fn check_version<C>(mfrc522: &mut Mfrc522<C, Initialized>) -> anyhow::Result<()>
+where
+    C: Interface,
+    C::Error: core::fmt::Debug,
+{
     let version = mfrc522
         .version()
         .map_err(|e| anyhow::anyhow!("could not read the MFRC522 version register: {e:?}"))?;
     match version {
-        0x91 | 0x92 => log::info!("MFRC522 present, version {version:#04x}"),
+        0x91 | 0x92 => {
+            log::info!("MFRC522 present, version {version:#04x}");
+            Ok(())
+        }
         0x00 | 0xFF => anyhow::bail!(
             "no MFRC522 answered (version {version:#04x}): nothing on the bus, or RST/CS miswired"
         ),
@@ -129,8 +193,6 @@ pub fn start<'d, SPI: SpiAnyPins + 'd>(
              is the one that comes back corrupted while writes still appear to work"
         ),
     }
-
-    Ok(Reader { mfrc522, _rst: rst })
 }
 
 /// Uppercase hex, which is how the platform's own examples write a card id

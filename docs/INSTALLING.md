@@ -331,24 +331,26 @@ Seven are always used; **sense**, **relay**, **stop**, **strike** and
 
 One column per board. The firmware is built for a board by setting `BOARD`
 (and `MCU` for its chip); left unset, each chip builds its default board:
-`c6-supermini`, `c5-devkitc1`, `c3-supermini` and `s3-devkitc1`.
+`c6-supermini`, `c5-xiao-carrier`, `c3-supermini` and `s3-devkitc1`. A `—` is a
+pin the board does not have: the carrier ties the RC522's RST to 3.3 V, and its
+SPI pins are for an unconverted reader only (a converted one is on I²C).
 
-| signal | c6-supermini | c5-devkitc1 | c3-supermini | s3-devkitc1 |
-|---|---|---|---|---|
-| light | 8 | 27 | 8 | 48 |
-| setup | 9 | 28 | 9 | 0 |
-| sclk | 0 | 6 | 10 | 12 |
-| mosi | 1 | 5 | 7 | 11 |
-| miso | 2 | 4 | 6 | 13 |
-| cs | 3 | 10 | 5 | 10 |
-| rst | 18 | 8 | 21 | 14 |
-| sda | 22 | 23 | 1 | 4 |
-| scl | 23 | 24 | 0 | 5 |
-| sense | 14 | 1 | 2 | 15 |
-| relay | 19 | 9 | 3 | 16 |
-| stop | 20 | 3 | 20 | 17 |
-| strike | 21 | 0 | 4 | 18 |
-| powered | 7 | — | — | 21 |
+| signal | c6-supermini | c5-xiao-carrier | c5-devkitc1 | c3-supermini | s3-devkitc1 |
+|---|---|---|---|---|---|
+| light | 8 | 11 | 27 | 8 | 48 |
+| setup | 9 | 28 | 28 | 9 | 0 |
+| sclk | 0 | 8 | 6 | 10 | 12 |
+| mosi | 1 | 10 | 5 | 7 | 11 |
+| miso | 2 | 9 | 4 | 6 | 13 |
+| cs | 3 | 7 | 10 | 5 | 10 |
+| rst | 18 | — | 8 | 21 | 14 |
+| sda | 22 | 23 | 23 | 1 | 4 |
+| scl | 23 | 24 | 24 | 0 | 5 |
+| sense | 14 | 1 | 1 | 2 | 15 |
+| relay | 19 | 0 | 9 | 3 | 16 |
+| stop | 20 | 12 | 3 | 20 | 17 |
+| strike | 21 | 25 | 0 | 4 | 18 |
+| powered | 7 | — | — | — | 21 |
 
 ### Do not move these on a C6 Super Mini
 
