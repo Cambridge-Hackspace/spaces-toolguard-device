@@ -145,16 +145,28 @@ fn main() -> anyhow::Result<()> {
         pins.gpio7,
         pins.gpio6,
         pins.gpio5,
-        pins.gpio4,
+        // rst is GPIO21, U0TXD, and the strike is not (#20). The console is
+        // native USB on 18/19, but that does not free UART0's TX at boot: by
+        // default (EFUSE_UART_PRINT_CONTROL = 0) the ROM prints its messages
+        // on UART0 whatever the application's console is, and the datasheet
+        // lists U0TXD as output-enabled with a pull-up after reset. A latch
+        // driver there would pulse the door open on every power-up, crash
+        // and update, before this code runs. The RC522's reset is the one
+        // output here that does not care: toggling it during boot only
+        // resets a reader the firmware resets again anyway.
+        pins.gpio21,
         pins.gpio1,
         pins.gpio0,
         pins.gpio2,
         pins.gpio3,
-        // GPIO20 is U0RXD and GPIO21 is U0TXD. The C3 Super Mini's console is
-        // native USB on 18/19, so UART0 is free for a switch and a latch; a
-        // board that logs over UART0 is not.
+        // GPIO20 is U0RXD: an input with a pull-up after reset, which the ROM
+        // does not drive, so the stop button is safe there.
         pins.gpio20,
-        pins.gpio21,
+        // The strike is GPIO4 (MTMS): input-enabled with no pull at reset and
+        // not driven by the ROM, so the driver's gate pull-down holds it off
+        // until the firmware drives it low. Not GPIO6 (MTCK), which has a
+        // pull-up after reset unless JTAG is disabled in eFuse.
+        pins.gpio4,
     );
     // No powered input on the C3: every usable pin is taken. "Machine powered
     // by: input" falls back to seen-idle there, and says so.

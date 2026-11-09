@@ -323,13 +323,13 @@ Seven are always used; **sense**, **relay**, **stop**, **strike** and
 | mosi | 1 | 5 | 7 | 11 |
 | miso | 2 | 4 | 6 | 13 |
 | cs | 3 | 10 | 5 | 10 |
-| rst | 18 | 8 | 4 | 14 |
+| rst | 18 | 8 | 21 | 14 |
 | sda | 22 | 23 | 1 | 4 |
 | scl | 23 | 24 | 0 | 5 |
 | sense | 14 | 1 | 2 | 15 |
 | relay | 19 | 9 | 3 | 16 |
 | stop | 20 | 3 | 20 | 17 |
-| strike | 21 | 0 | 21 | 18 |
+| strike | 21 | 0 | 4 | 18 |
 | powered | 7 | — | — | 21 |
 
 ### Do not move these on a C6 Super Mini
