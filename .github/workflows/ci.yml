@@ -52,7 +52,16 @@ jobs:
         with:
           path: .embuild
           key: embuild-${{ matrix.mcu }}-${{ hashFiles('.cargo/config.toml', 'sdkconfig.defaults', 'partitions.csv') }}
+      # Keyed by chip as well as job. The job id is `riscv` for every entry
+      # in this matrix, and the C5 and C6 share a target triple, so without
+      # this the C5 job could restore the C6's target/ -- esp-idf-sys's build
+      # directory configured for esp32c6 -- and CMake refuses to switch:
+      # "CMAKE_TOOLCHAIN_FILE 'toolchain-esp32c6' does not match currently
+      # selected IDF_TARGET 'esp32c5'". Which job saved last decided whether
+      # the C5 build passed.
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.mcu }}
       - name: Lint
         env:
           MCU: ${{ matrix.mcu }}
