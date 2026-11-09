@@ -35,7 +35,7 @@ included, which goes through this firmware, a lease and a Wi-Fi link.
 
 | Path | What it is |
 |---|---|
-| `toolguard-core/` | the glue over `spaces_device::Module`, the display model and the stop-button debouncer: no hardware, no I/O, host-tested |
+| `toolguard-core/` | the box as a `spaces_device::Device`: the glue over `spaces_device::Module`, the display model, and how usage is sensed. No hardware, no I/O, host-tested |
 | `toolguard-fw/` | the ESP-IDF firmware: RC522 over SPI, 1602 over I2C, three chips |
 
 The protocol is not redefined here. `Module`, the topics and the wire types come
@@ -110,11 +110,12 @@ wiring anything, both wiring modes, commissioning in order, and what to do when
 it does not work. This section is the summary.
 
 Seven pins always: SPI (SCLK, MOSI, MISO, CS) plus RST for the RC522, and
-SDA/SCL for the panel. Four more are used only by the roles that need them —
+SDA/SCL for the panel. Five more are used only by the roles that need them —
 a **sense** input for a box that watches the machine, a **relay** output for one
 that switches it, a **stop** input for a momentary switch to GND that ends
-the session when anyone presses it, and a **strike** output for a door's latch
-driver. The assignment is a `cfg`-gated tuple in
+the session when anyone presses it, a **strike** output for a door's latch
+driver, and a **powered** input that says the watched machine is on (not on
+the C3 or the C5, which have no pin left for it). The assignment is a `cfg`-gated tuple in
 `toolguard-fw/src/main.rs`, one arm per chip, the reasoning is in
 `toolguard-fw/src/board.rs`, and the table in `docs/INSTALLING.md` is checked
 against the tuple by a test.
@@ -127,9 +128,10 @@ settings are on the device's own setup page and are read at boot; see
 `toolguard-fw/src/settings.rs` for each one, its default, and what going wrong
 looks like. Two are worth knowing before wiring anything:
 
-- **"Senses the machine"** must be `no` unless something really is wired to the
-  sense input. A device that reports zero working time is believed, and on a
-  tool billed by working time that bills nothing.
+- **"Usage measured by"** must be `none` unless something really is wired to
+  the sense input. A device that reports zero working time is believed, and on
+  a tool billed by working time that bills nothing. On a laser it is `pulses`,
+  with "Machine powered by" set; `docs/INSTALLING.md` §3 has why.
 - **"Switches the tool"** must be `yes` only if a relay is wired, because it is
   also what makes this device register in the `power` role — and the platform
   will not lease a tool to a box that claims to switch it and does not.

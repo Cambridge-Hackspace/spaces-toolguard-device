@@ -35,9 +35,13 @@ impl Screen {
     ///
     /// Truncation is by CHARACTER and not by byte: `str::truncate` panics on a
     /// multi-byte boundary, and a reason arriving from the edge is arbitrary
-    /// UTF-8 the firmware does not control. An HD44780 cannot render most of it
-    /// anyway — that is the shell's problem, and it gets a string of the right
-    /// LENGTH here rather than a string of the right byte count.
+    /// UTF-8 the firmware does not control.
+    ///
+    /// **And every character is one the panel can draw.** An HD44780 is sent
+    /// bytes, so an em dash written as its three UTF-8 bytes is three
+    /// characters of whatever its ROM holds at those codes -- garbage, and
+    /// three columns of it. See [`drawable`]: what is left is plain ASCII, one
+    /// byte per column, so a line of sixteen characters is sixteen columns.
     pub fn new(top: &str, bottom: &str) -> Self {
         Screen {
             lines: [fit(top), fit(bottom)],
@@ -58,9 +62,24 @@ impl Screen {
     }
 }
 
-/// One line, cut to the panel's width in CHARACTERS.
+/// One line, made drawable and cut to the panel's width.
 fn fit(s: &str) -> String {
-    s.chars().take(COLS).collect()
+    s.chars().map(drawable).take(COLS).collect()
+}
+
+/// `c` if the panel's character ROM draws it as itself, else `?`.
+///
+/// The common HD44780 ROM (A00, the Japanese one) has printable ASCII from
+/// space to `}` with two exceptions: `\` is a yen sign and `~` is an arrow.
+/// Everything else -- accents, curly quotes, dashes, control characters -- has
+/// either no glyph or the wrong one there. A `?` says something was there
+/// without pretending to know what; the full reason is in the log.
+pub fn drawable(c: char) -> char {
+    match c {
+        '\\' | '~' => '?',
+        ' '..='}' => c,
+        _ => '?',
+    }
 }
 
 /// How the device is doing, for the diagnostic screen.
@@ -101,6 +120,13 @@ pub fn idle(health: &Health) -> Screen {
         // spent on the instruction instead of on an empty field.
         None => Screen::new("Present card", ""),
     }
+}
+
+/// The resting screen with something the box needs somebody to know, in place
+/// of the clock: still taking cards, but not configured as the platform has
+/// it. The detail is in the log.
+pub fn idle_with_notice(notice: &str) -> Screen {
+    Screen::new("Present card", notice)
 }
 
 /// The screen while the edge is being asked about a card.

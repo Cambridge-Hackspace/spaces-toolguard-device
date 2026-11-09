@@ -288,6 +288,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
 
 [[package]]
+name = "css_wire"
+version = "0.1.0"
+source = "git+https://github.com/Cambridge-Hackspace/cooperative-systems-spaces?tag=css_wire-v0.1.0#444aa81e0f530537643238829e9419b9d8446f00"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "cvt"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1258,17 +1266,18 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "spaces-device"
-version = "0.4.0"
-source = "git+https://github.com/Cambridge-Hackspace/spaces-firmware?tag=v0.4.0#9257336ccb893b799900279d45ed6bafb94144f6"
+version = "0.8.0"
+source = "git+https://github.com/Cambridge-Hackspace/spaces-firmware?tag=v0.8.0#b2050cc785fa36e030e1bb8fe6a6bb16b27cdf30"
 dependencies = [
+ "css_wire",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "spaces-device-espidf"
-version = "0.4.0"
-source = "git+https://github.com/Cambridge-Hackspace/spaces-firmware?tag=v0.4.0#9257336ccb893b799900279d45ed6bafb94144f6"
+version = "0.8.0"
+source = "git+https://github.com/Cambridge-Hackspace/spaces-firmware?tag=v0.8.0#b2050cc785fa36e030e1bb8fe6a6bb16b27cdf30"
 dependencies = [
  "anyhow",
  "embedded-svc",

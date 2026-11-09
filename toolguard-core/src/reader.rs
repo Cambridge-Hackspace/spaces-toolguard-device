@@ -29,6 +29,7 @@
 use spaces_device::{Action as DeviceAction, Activity, Config, Module, Outcome, Output};
 
 use crate::screen::{self, Health, Screen};
+use crate::sense::{Powered, Reading, Sense, Source};
 
 /// An effect for the shell to carry out.
 ///
@@ -80,17 +81,52 @@ pub struct Reader {
     /// While an outcome is on the panel, when it stops being.
     showing_until: Option<u64>,
     last_card: Option<(String, u64)>,
+    /// Whether the tool output is on, as last driven. A plug owns no session
+    /// and reports no outcomes, so for it this is what "open" means.
+    tool_on: bool,
+    /// Shown on the resting screen in place of the clock; see
+    /// [`Reader::notice`].
+    notice: Option<String>,
+    /// How [`Reader::sense`] decides the machine is working.
+    sense: Sense,
 }
 
 impl Reader {
+    /// A reader whose usage source follows `config.senses_running`: the
+    /// input's level, or nothing. See [`Reader::sensing`] for the others.
     pub fn new(config: Config) -> Self {
+        let source = if config.senses_running {
+            Source::Level
+        } else {
+            Source::None
+        };
         Reader {
+            sense: Sense::new(source, Powered::Always),
             module: Module::new(config),
             health: Health::default(),
             shown: None,
             showing_until: None,
             last_card: None,
+            tool_on: false,
+            notice: None,
         }
+    }
+
+    /// Measure usage by `source`, qualified by `powered`, rather than by the
+    /// input's level alone.
+    pub fn sensing(mut self, source: Source, powered: Powered) -> Self {
+        self.sense = Sense::new(source, powered);
+        self
+    }
+
+    /// The address this box was given, and that its network is up: what the
+    /// shell knows once `boot()` has returned, before the loop that runs the
+    /// box starts. The loop then reports the link, which it knows, and never
+    /// the address, which it does not.
+    pub fn joined(mut self, address: impl Into<String>) -> Self {
+        self.health.address = Some(address.into());
+        self.health.wifi = true;
+        self
     }
 
     pub fn tool_id(&self) -> &str {
@@ -118,6 +154,41 @@ impl Reader {
         self.module.activity()
     }
 
+    /// Whether anything is open: a question out to the edge, a session, or the
+    /// tool energized. An update waits while it is.
+    ///
+    /// A box restarting mid-session drops the tool's power if it switches it,
+    /// and comes back up knowing nothing of the session it had, which then
+    /// nobody releases. A question in flight counts too, because a restart
+    /// between it and its answer is a yes nobody acts on. The loop that runs
+    /// this box asks after every step and tells the updater on a change
+    /// (`spaces_device::Driver`).
+    pub fn in_session(&self) -> bool {
+        self.tool_on || self.module.activity() != Activity::Idle
+    }
+
+    /// The link changed: Wi-Fi and the broker, as the loop sees them. The
+    /// address and the clock, which the loop does not know, are kept.
+    pub fn link(&mut self, wifi: bool, broker: bool, now: u64) -> Vec<Action> {
+        let health = Health {
+            wifi,
+            broker,
+            ..self.health.clone()
+        };
+        let mut out = self.tick(now);
+        out.extend(self.health(health, now));
+        out
+    }
+
+    /// The wall clock for the resting screen, as `HH:MM`, when it is known.
+    pub fn clock(&mut self, clock: Option<String>, now: u64) -> Vec<Action> {
+        let health = Health {
+            clock,
+            ..self.health.clone()
+        };
+        self.health(health, now)
+    }
+
     /// Put the outputs in a known state and send the first heartbeat.
     pub fn start(&mut self, now: u64) -> Vec<Action> {
         let actions = self.module.start(now);
@@ -129,6 +200,17 @@ impl Reader {
     /// Tell the reader what the shell knows about the network.
     pub fn health(&mut self, health: Health, now: u64) -> Vec<Action> {
         self.health = health;
+        let mut out = Vec::new();
+        self.refresh(now, &mut out);
+        out
+    }
+
+    /// Something the box needs somebody to know while it otherwise works --
+    /// that its roles changed after registration, say -- for the resting
+    /// screen, or `None` to clear it. Sixteen columns: the reason belongs in
+    /// the log.
+    pub fn notice(&mut self, notice: Option<&str>, now: u64) -> Vec<Action> {
+        self.notice = notice.map(str::to_string);
         let mut out = Vec::new();
         self.refresh(now, &mut out);
         out
@@ -176,6 +258,14 @@ impl Reader {
         out
     }
 
+    /// What the sense pins said this pass. Call every pass: the source decides
+    /// from it whether the machine is working, and [`Reader::running`] is told.
+    pub fn sense(&mut self, reading: Reading, now: u64) -> Vec<Action> {
+        let open = matches!(self.module.activity(), Activity::Session { .. });
+        let working = self.sense.working(reading, open);
+        self.running(working, now)
+    }
+
     /// A stop button was pressed.
     pub fn tool_off(&mut self, now: u64) -> Vec<Action> {
         let actions = self.module.tool_off(now);
@@ -208,7 +298,12 @@ impl Reader {
                 DeviceAction::Publish { topic, payload } => {
                     out.push(Action::Publish { topic, payload })
                 }
-                DeviceAction::Set { output, on } => out.push(Action::Set { output, on }),
+                DeviceAction::Set { output, on } => {
+                    if output == Output::Tool {
+                        self.tool_on = on;
+                    }
+                    out.push(Action::Set { output, on })
+                }
                 DeviceAction::Note(text) => out.push(Action::Note(text)),
                 DeviceAction::Outcome(outcome) => {
                     let screen = match &outcome {
@@ -279,7 +374,10 @@ impl Reader {
             ),
             Activity::Idle => {
                 if self.health.ready() {
-                    screen::idle(&self.health)
+                    match &self.notice {
+                        Some(notice) => screen::idle_with_notice(notice),
+                        None => screen::idle(&self.health),
+                    }
                 } else {
                     screen::diagnostics(&self.health)
                 }

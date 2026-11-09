@@ -143,6 +143,37 @@ machine is *not* working. In gating mode it means the box enables the laser when
 it means to disable it — which is why §4b asks you to test it with the tube
 disconnected.
 
+### What the line does, measured
+
+On the Hackspace laser's RDC6442S-B(EC), `L-ON1` against `GND`, with the
+default polarity:
+
+| machine | `L-ON1` |
+|---|---|
+| off | ~0 V |
+| on, not firing | 4.4 V |
+| firing | pulses towards 0 V; a multimeter shows something in between |
+
+Three things follow, and each changes a setting in §6:
+
+- **It is about 5 V.** Never put it on an ESP32 pin, which takes 3.3 V at most.
+  It goes through the isolator in §4, always.
+- **Firing is pulses, not a level.** While engraving, the line drops for every
+  dot and every scan line, for milliseconds at a time, and a meter averages
+  them. Set **"Usage measured by"** to `pulses`: the box catches each one by
+  interrupt instead of looking at the line now and then, and "Bridge gaps"
+  joins them into one stretch of working.
+- **Off looks the same as firing**, because the line's pull-up is powered by
+  the machine. Read naively, a box powered while the laser is switched off
+  bills the whole session as working. Fix it in the wiring if you can: feed the
+  optocoupler's LED from a 5 V supply that exists only while the machine is
+  on, through its resistor, to `L-ON1` — off is then no current, the same as
+  idle. Otherwise set **"Machine powered by"**: `input` with a second signal
+  that says the machine is on, or `seen-idle`, which needs the line to read
+  idle once each session before anything counts. `seen-idle` catches a laser
+  that is off when the member signs on, not one switched off during the
+  session.
+
 ---
 
 ## 4. Wiring
@@ -181,6 +212,19 @@ what the signal does.
 The relay must be wired so that **de-energized = laser disabled**. Then a box
 that loses power, crashes, or loses its lease fails to the safe state without
 having to do anything.
+
+**Put a pull-down on the relay driver's input** (10 kΩ to GND is plenty), and
+on the strike driver's (§4d). The firmware drives both pins low as the very
+first thing it does, but there is a moment before that — power-up, a reset,
+a board being flashed, a board with no firmware at all — when the pin is an
+input and floats, and a driver that reads a floating input as *on* closes
+for that moment. A pull-down means nothing the ESP32 is doing, or not doing,
+can energize the tool.
+
+The driver must be **active-high**: the pin goes high to energize. An
+active-low relay module — common, and sold as "low level trigger" — is on
+whenever its input is low, which is every moment this box means *off*. Do not
+use one here.
 
 **Test it with the laser tube disconnected first.** Confirm that an
 unauthorized card leaves the enable line in the disabled state and an authorized
@@ -264,8 +308,9 @@ the latch pulses on the yes, the relay follows its lease as in gating mode.
 
 ## 5. Pins
 
-Seven are always used; **sense**, **relay**, **stop** and **strike** only by the
-modes that need them.
+Seven are always used; **sense**, **relay**, **stop**, **strike** and
+**powered** only by the modes that need them. The C3 and the C5 have no pin left for
+**powered**.
 
 <!-- PINMAP: checked against toolguard-fw/src/main.rs by
      toolguard-core/tests/pinmap.rs. Keep the table shape if you edit it. -->
@@ -285,6 +330,7 @@ modes that need them.
 | relay | 19 | 9 | 3 | 16 |
 | stop | 20 | 3 | 20 | 17 |
 | strike | 21 | 0 | 21 | 18 |
+| powered | 7 | — | — | 21 |
 
 ### Do not move these on a C6 Super Mini
 
@@ -360,8 +406,10 @@ after a firmware update rather than dropping into its portal.
 |---|---|---|
 | Has a card reader | yes | `no` makes this a plug: it switches the tool on the edge's lease and never reads a badge |
 | Switches the tool | **no** | `yes` drives the relay — and registers this device in the `power` role |
-| Senses the machine | **no** | `yes` reads the sense pin and reports working time. Without one, a box that switches the tool reports the time the power was on; a box that does neither reports no time |
+| Usage measured by | **none** | `level`: working while the sense pin is asserted. `pulses`: while it is asserted or pulsing — `L-ON1` (§3). `relay`: the time this box's relay was on, which is also what a box that switches the tool and senses nothing reports. With `none`, a box that does neither reports no time. Replaces "Senses the machine": a box set up with that keeps what it did |
 | Sense is active low | yes | match §3. Wrong = usage recorded when the machine is idle |
+| Machine powered by | none | for a signal that reads as working while the machine is off, as `L-ON1` does (§3). `input`: the powered pin says the machine is on (not on a C3 or C5, which have no pin for it). `seen-idle`: the signal must read idle once each session before it counts |
+| Powered input is active low | yes | the powered pin reads low while the machine is on |
 | Bridge gaps (seconds) | 10 | how long the machine may pause and still count as working. See §2c |
 | Ignore blips under (ms) | 100 | the signal must hold this long to count |
 | Tap again to finish | yes, unless gating | the member's own card ends their session |
@@ -420,8 +468,8 @@ follow for the machine's box:
 
 #### Three that are easy to get wrong
 
-- **"Senses the machine" must be `no` unless something really is wired in.** A
-  device that reports zero working time is *believed*. On a tool billed by
+- **"Usage measured by" must be `none` unless something really is wired in.**
+  A device that reports zero working time is *believed*. On a tool billed by
   working time that bills nothing, for every member, silently.
 - **"Switches the tool" must be `yes` only if a relay is wired**, because it is
   also what makes this box register as a `power` device. Claim it falsely and
@@ -450,6 +498,23 @@ the roles it actually claims:
 | reader + drives a latch | `reader`, `strike` — a door box |
 | reader + switches + drives a latch | `reader`, `power`, `strike` — a room in one box |
 
+**The roles are sent once, when the box registers, and never again.** Turning
+"Has a card reader", "Switches the tool", "Usage measured by" or "Drives a
+latch" on or off afterwards changes what the box does, and not what the
+platform has it as — so a reader later told it switches the tool drives its
+relay but can never be bound in `power`, and is never leased. The box notices:
+its resting screen says **Roles changed**, and the log says what the platform
+has and what the settings now claim.
+
+To fix it, either change the settings back, or register the box again: erase
+its settings and set it up from scratch with a new invite. Erasing the
+settings partition also erases its Wi-Fi details and everything else entered
+on the setup page:
+
+```sh
+espflash erase-parts --partition-table partitions.csv nvs
+```
+
 ---
 
 ## 7. Commissioning, in order
@@ -472,7 +537,7 @@ the roles it actually claims:
    scanned, and the parts look identical.
 7. **Swipe a known-good card** and watch the panel: `Checking card` →
    `ACCESS GRANTED` → `Signed in`. In gating mode it should read
-   `Tool unlocked` once the lease arrives. With "Senses the machine" on, the
+   `Tool unlocked` once the lease arrives. With a usage source that reads the sense pin, the
    bottom line is the meter -- `Idle     0:00:00` until the machine works,
    then `In use   0:00:07` climbing -- and it is the same figure the box
    reports, so a member can check what they are being billed. Without a
@@ -534,7 +599,7 @@ Two consequences worth knowing:
 | Every card is `ACCESS DENIED` with a credential-shaped reason | the device is not bound to the tool. Step 4 |
 | Panel goes `ACCESS GRANTED` then `Session ended` a few seconds later | configured as switching the tool but not bound in the `power` role, so no lease ever arrives. The log says `is this module bound in the power role?` |
 | Tool stays "in use" after a member leaves | nothing closed the session. Turn on "Tap again to finish", or set a session cap, or both. The server does eventually release it -- once the tool's session cap plus a grace has run out, hours at the defaults -- and raises a Warning-severity `tool_released_by_sweep` event when it does. That is a net for a crashed box, not a way to run one |
-| A member is billed nothing for a long job | usage was never reported. On a box that switches the tool, check it is bound in the `power` role and the lease arrives (the figure is the time the power was on). On a box that only senses, check "Senses the machine" is on, the sense polarity, and the job against §2c. A box that does neither has no figure to report |
+| A member is billed nothing for a long job | usage was never reported. On a box that switches the tool, check it is bound in the `power` role and the lease arrives (the figure is the time the power was on). On a box that only senses, check "Usage measured by" (`pulses` for a laser, §3), the sense polarity, and the job against §2c. A box that does neither has no figure to report |
 | Usage is a fraction of the real time | "Bridge gaps" is shorter than the machine's pauses. §2c |
 | Usage counts time the machine was idle | sense polarity is inverted. §3 |
 | No card is ever detected, version register fine | SPI mode. §5 |

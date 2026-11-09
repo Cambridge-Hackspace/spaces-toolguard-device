@@ -591,7 +591,7 @@ fn door_box() -> Reader {
 }
 
 fn yes_with_strike(pulse_ms: u64) -> Vec<u8> {
-    serde_json::json!({"resource": "front-door", "authorized": true, "strike": {"pulse_ms": pulse_ms}})
+    serde_json::json!({"resource": "front-door", "authorized": true, "reason": "authorized", "strike": {"pulse_ms": pulse_ms}})
         .to_string()
         .into_bytes()
 }
@@ -659,4 +659,218 @@ fn a_door_boxs_stop_button_releases_the_resource_without_a_card() {
         stop.get("card").is_none(),
         "named a card it does not have: {stop}"
     );
+}
+
+// ------------------------------------- whether an update may restart the box
+
+/// Make a call on the reader, then ask whether the box is open, as the loop
+/// that runs it does after every step: the session is a query on the reader,
+/// not an action it emits (#18).
+macro_rules! saw {
+    ($r:ident . $($call:tt)*) => {{
+        let _ = $r.$($call)*;
+        $r.in_session()
+    }};
+}
+
+/// A session opened by Alice's card on `r` at 100, answered yes at 200.
+fn signed_in(r: &mut Reader) {
+    saw!(r.card(ALICE, 100));
+    assert!(
+        saw!(r.message(topic::SCAN_RESPONSE, &yes(), 200)),
+        "a yes did not open a session for the update guard"
+    );
+}
+
+#[test]
+fn a_question_out_to_the_edge_already_holds_off_an_update() {
+    // A restart between the question and its answer is a yes nobody acts on.
+    let mut r = reader();
+    assert!(saw!(r.card(ALICE, 100)), "asking did not count as open");
+}
+
+#[test]
+fn a_refusal_or_no_answer_leaves_nothing_open() {
+    let mut r = reader();
+    saw!(r.card(ALICE, 100));
+    assert!(!saw!(r.message(
+        topic::SCAN_RESPONSE,
+        &no("Unknown card"),
+        200
+    )));
+
+    saw!(r.card(BOB, 1_000));
+    assert!(
+        !saw!(r.tick(1_000 + 5_000)),
+        "a question nobody answered left the box held open"
+    );
+}
+
+#[test]
+fn a_card_that_is_not_sent_opens_nothing() {
+    let mut r = Reader::new(Config::switches_nothing(ME, TOOL));
+    saw!(r.start(0));
+    saw!(r.health(
+        Health {
+            wifi: true,
+            broker: false,
+            address: None,
+            clock: None,
+        },
+        0,
+    ));
+    assert!(!saw!(r.card(ALICE, 100)));
+}
+
+#[test]
+fn every_way_a_session_ends_closes_it_for_the_update_guard() {
+    // A second tap.
+    let mut r = reader();
+    signed_in(&mut r);
+    assert!(
+        !saw!(r.card(ALICE, 100 + SAME_CARD_COOLDOWN_MS + 1)),
+        "tap off"
+    );
+
+    // The stop button.
+    let mut r = reader();
+    signed_in(&mut r);
+    assert!(!saw!(r.tool_off(30_000)), "stop button");
+
+    // A lease that lapses, on a box that switches the tool: open from the yes,
+    // through the lease, until it runs out.
+    let mut r = gating_reader();
+    signed_in(&mut r);
+    assert!(saw!(r.message(topic::LEASE, &lease(2_000), 300)));
+    assert!(!saw!(r.tick(300 + 2_001)), "lease lapse");
+
+    // The longest session.
+    let mut config = Config::switches_nothing(ME, TOOL);
+    config.max_session_ms = 60_000;
+    let mut r = Reader::new(config);
+    r.start(0);
+    r.health(online(), 0);
+    signed_in(&mut r);
+    assert!(saw!(r.tick(200 + 59_000)));
+    assert!(!saw!(r.tick(200 + 60_000)), "max session");
+
+    // Idle too long, on a box that senses the machine.
+    let mut config = Config::switches_nothing(ME, TOOL);
+    config.senses_running = true;
+    config.idle_end_ms = 30_000;
+    let mut r = Reader::new(config);
+    r.start(0);
+    r.health(online(), 0);
+    signed_in(&mut r);
+    assert!(!saw!(r.tick(200 + 31_000)), "idle end");
+
+    // A door box: the session is the pulse.
+    let mut r = door_box();
+    saw!(r.card(ALICE, 100));
+    assert!(saw!(r.message(
+        topic::SCAN_RESPONSE,
+        &yes_with_strike(4200),
+        200
+    )));
+    assert!(!saw!(r.tick(4400)), "door pulse");
+}
+
+#[test]
+fn a_plug_is_open_exactly_while_it_is_energized() {
+    // A plug owns no session and reports no outcomes; its relay is all there
+    // is to go on.
+    let mut r = Reader::new(Config::power_only(ME, TOOL));
+    saw!(r.start(0));
+    saw!(r.health(online(), 0));
+    assert!(!r.in_session());
+    assert!(saw!(r.message(topic::LEASE, &lease(2_000), 100)), "leased");
+    assert!(!saw!(r.tick(100 + 2_001)), "lease lapsed");
+}
+
+#[test]
+fn the_shared_loop_tells_the_updater_once_per_change() {
+    // The loop that runs this box (spaces_device::Driver) asks after every
+    // step and tells the updater only when the answer changes. Driven here
+    // with the real reader, so a session that opens and stays open is one
+    // Session(true), not one per tick.
+    use spaces_device::{Driver, LinkEvent, Step};
+    let mut d = Driver::new(reader());
+    let sessions = |steps: &[Step<Action>]| {
+        steps
+            .iter()
+            .filter(|s| matches!(s, Step::Session(_)))
+            .count()
+    };
+    let opened = d.input(toolguard_core::Input::Card(ALICE.into()), 100);
+    assert!(opened.contains(&Step::Session(true)));
+    let answered = d.on(
+        LinkEvent::Message {
+            topic: topic::SCAN_RESPONSE.into(),
+            payload: yes(),
+        },
+        200,
+    );
+    assert_eq!(sessions(&answered), 0, "still open: not news");
+    assert_eq!(sessions(&d.tick(300)), 0, "repeated an unchanged state");
+}
+
+#[test]
+fn losing_wifi_says_no_wifi_however_the_broker_loss_follows() {
+    // The broker drops because Wi-Fi did; the panel names the half that is
+    // actually missing, whichever of the two the firmware hears about first.
+    for broker_first in [false, true] {
+        let mut r = reader();
+        let lost = |wifi, broker| Health {
+            wifi,
+            broker,
+            address: Some("192.168.1.50".into()),
+            clock: None,
+        };
+        if broker_first {
+            r.health(lost(true, false), 100);
+            assert_eq!(here(&r).0, "No edge");
+            r.health(lost(false, false), 200);
+        } else {
+            r.health(lost(false, true), 100);
+            r.health(lost(false, false), 200);
+        }
+        assert_eq!(here(&r).0, "No Wi-Fi", "broker first: {broker_first}");
+        // And back: Wi-Fi alone is not enough to take a card.
+        r.health(lost(true, false), 300);
+        assert_eq!(here(&r).0, "No edge");
+        r.health(online(), 400);
+        assert_eq!(here(&r).0, "Present card");
+    }
+}
+
+#[test]
+fn a_notice_takes_the_resting_screen_and_cards_are_still_taken() {
+    let mut r = reader();
+    let out = r.notice(Some("Roles changed"), 10);
+    assert_eq!(
+        screen(&out),
+        Some(("Present card".into(), "Roles changed".into()))
+    );
+    // Still a working box: a card is asked about as ever.
+    assert_eq!(publishes_to(&r.card(ALICE, 100)), vec![topic::SCAN_REQUEST]);
+    r.message(topic::SCAN_RESPONSE, &no("Unknown card"), 200);
+    r.tick(200 + SHOW_MS);
+    assert_eq!(here(&r).1, "Roles changed", "the notice did not come back");
+    // The diagnostic screen still wins when the box cannot ask at all: the
+    // address to reach the log at matters more then.
+    r.health(
+        Health {
+            wifi: true,
+            broker: false,
+            address: Some("192.168.1.50".into()),
+            clock: None,
+        },
+        10_000,
+    );
+    assert_eq!(here(&r), ("No edge".into(), "192.168.1.50".into()));
+    r.health(online(), 10_100);
+    assert_eq!(here(&r).1, "Roles changed");
+    // And cleared.
+    r.notice(None, 10_200);
+    assert_eq!(here(&r), ("Present card".into(), String::new()));
 }
