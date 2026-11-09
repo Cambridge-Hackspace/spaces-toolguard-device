@@ -2,13 +2,19 @@
 //!
 //! ## Provenance
 //!
-//! Adapted from `Cambridge-Hackspace/nfc-522`'s `src/nfc.rs` by
-//! gmorell <gmp@gmp.io>, which is **GPL-3.0**. This file is therefore the one
-//! place in this AGPL-3.0-or-later repository with a second copyright; AGPLv3
-//! §13 permits the combination, and the GPL-licensed portion keeps its own
-//! terms. What is taken is the shape rather than the text: probe by version
-//! register, REQA/HLTA to make a resting card read once, and a same-UID
-//! cooldown.
+//! **[`Reader::poll`] is derived from `Cambridge-Hackspace/nfc-522`**, its
+//! `src/nfc.rs` `Reader::poll`: the REQA, SELECT, HLTA, STOP-CRYPTO1 sequence
+//! and the two comments explaining it are close paraphrases of that code.
+//! That portion is Copyright 2026 gmorell <gmp@gmp.io> and licensed
+//! **GPL-3.0** (nfc-522's `LICENSE.md`); it is combined here with
+//! AGPL-3.0-or-later code, as AGPLv3 §13 permits, and keeps its own terms.
+//! This is the one place in this repository with a second copyright.
+//!
+//! The rest of this file is this repository's own, AGPL-3.0-or-later: the
+//! bring-up in [`start`], the mode-3 SPI configuration, the version-register
+//! checks and their diagnostics, and `to_hex`. Two ideas come from nfc-522
+//! without its text -- probing by the version register, and a same-UID
+//! cooldown (which lives in the core here, see below).
 //!
 //! That firmware is a good hardware reference and not a protocol one — it
 //! publishes to `{topic_root}/scans/<channel>` and speaks no `toolguard/*` at
@@ -20,7 +26,7 @@
 //! and takes the default mode 0. That works on the C3 it targets and is the
 //! documented failure case on the S3, where ESP-IDF samples MISO on the wrong
 //! edge and every register read is corrupted while writes still land. See
-//! [`crate::board::SPI_MODE_3`].
+//! [`crate::board::SPI_MODE`].
 //!
 //! **The cooldown lives in the core, not here.** `nfc-522` debounces in the
 //! driver; this crate keeps the decision in `toolguard_core::reader`, where it
@@ -92,7 +98,7 @@ pub fn start<'d, SPI: SpiAnyPins + 'd>(
     let driver = SpiDriver::new(spi, sclk, mosi, Some(miso), &DriverConfig::new())
         .context("SPI bus for the RC522")?;
 
-    // Mode 3 explicitly. See board::SPI_MODE_3 -- mode 0 is the documented S3
+    // Mode 3 explicitly. See board::SPI_MODE -- mode 0 is the documented S3
     // corruption and the default if nothing says otherwise.
     let config = SpiConfig::new()
         .baudrate(Hertz(board::SPI_HZ))

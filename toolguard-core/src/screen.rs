@@ -16,8 +16,9 @@
 //! which is readable over the network at `/log`; the panel gets as much as fits.
 //! A reader who needs the exact string has somewhere to get it.
 
-/// The panel's shape. Not configurable: the hardware is a 1602.
 use spaces_device::Usage;
+
+/// The panel's shape. Not configurable: the hardware is a 1602.
 pub const COLS: usize = 16;
 pub const ROWS: usize = 2;
 
@@ -166,7 +167,7 @@ pub fn no_answer() -> Screen {
 
 /// The resting screen while a member's session is open.
 ///
-/// Two things a member needs and neither is the verdict, which has already come
+/// Three things a member needs and none is the verdict, which has already come
 /// and gone off the panel:
 ///
 /// - **whether the tool is actually live.** A device that gates power is

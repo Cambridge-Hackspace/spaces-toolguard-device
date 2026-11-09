@@ -15,8 +15,8 @@
 //!
 //! ## What is reader-specific
 //!
-//! The roles it declares, the one setting it adds (its tool), the peripherals,
-//! and [`Hardware`]: what the core's decisions are carried out on. The loop
+//! The roles it declares (from its settings), the settings it adds to the
+//! setup page ([`settings`]), the peripherals, and [`Hardware`]: what the core's decisions are carried out on. The loop
 //! that runs the box is spaces-device-espidf's `run()`, the same one every
 //! device runs (#18).
 
@@ -51,13 +51,6 @@ mod settings;
 /// is mostly idle.
 const POLL_MS: u64 = 75;
 
-/// This device reads cards. It switches nothing.
-///
-/// `capabilities.roles` is the device's own claim about itself, and the server
-/// lets an administrator bind it in any role it declares — so claiming `power`
-/// here would let someone make a reader with no relay the thing that energizes
-/// a machine, and the mistake surfaces at the far end of the system as a tool
-/// that never comes on.
 /// The tool this box guards. The rest of what it is lives in [`settings`],
 /// which is read from the same store.
 const TOOL_FIELD: &[Field] = &[Field {
@@ -120,9 +113,12 @@ fn main() -> anyhow::Result<()> {
         pins.gpio23,
         // All four from the freely usable set (IO0-3, IO14, IO18-23), which
         // SPI and I2C leave 14, 19, 20 and 21 of -- and these take all four,
-        // so a C6 Super Mini is full. None can do ADC: on the C6 that is
-        // GPIO0-6 only, and SPI has all of those -- so a sensed input here is
-        // digital, which is what an optoisolated enable line gives anyway. The
+        // which uses that set up. GPIO4-7 are the reserve (strapping and JTAG,
+        // usable once booted; see board.rs), and 7 carries powered below. None
+        // of these four can do ADC: on the C6 that is GPIO0-6, SPI holds 0-3,
+        // and an analog sense input would need 4-6 (#10) -- so a sensed input
+        // here is digital, which is what an optoisolated enable line gives
+        // anyway. The
         // stop button is a switch to GND on the internal pull-up; the strike
         // is an output to a latch driver (CS:S #182), driven low at boot.
         pins.gpio14,
@@ -145,16 +141,28 @@ fn main() -> anyhow::Result<()> {
         pins.gpio7,
         pins.gpio6,
         pins.gpio5,
-        pins.gpio4,
+        // rst is GPIO21, U0TXD, and the strike is not (#20). The console is
+        // native USB on 18/19, but that does not free UART0's TX at boot: by
+        // default (EFUSE_UART_PRINT_CONTROL = 0) the ROM prints its messages
+        // on UART0 whatever the application's console is, and the datasheet
+        // lists U0TXD as output-enabled with a pull-up after reset. A latch
+        // driver there would pulse the door open on every power-up, crash
+        // and update, before this code runs. The RC522's reset is the one
+        // output here that does not care: toggling it during boot only
+        // resets a reader the firmware resets again anyway.
+        pins.gpio21,
         pins.gpio1,
         pins.gpio0,
         pins.gpio2,
         pins.gpio3,
-        // GPIO20 is U0RXD and GPIO21 is U0TXD. The C3 Super Mini's console is
-        // native USB on 18/19, so UART0 is free for a switch and a latch; a
-        // board that logs over UART0 is not.
+        // GPIO20 is U0RXD: an input with a pull-up after reset, which the ROM
+        // does not drive, so the stop button is safe there.
         pins.gpio20,
-        pins.gpio21,
+        // The strike is GPIO4 (MTMS): input-enabled with no pull at reset and
+        // not driven by the ROM, so the driver's gate pull-down holds it off
+        // until the firmware drives it low. Not GPIO6 (MTCK), which has a
+        // pull-up after reset unless JTAG is disabled in eFuse.
+        pins.gpio4,
     );
     // No powered input on the C3: every usable pin is taken. "Machine powered
     // by: input" falls back to seen-idle there, and says so.

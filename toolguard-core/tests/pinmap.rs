@@ -222,3 +222,46 @@ fn a_transposed_pin_is_caught() {
          this check would not notice the table drifting"
     );
 }
+
+/// The outputs that switch something must not sit on a pin the chip drives,
+/// or pulls high, before the firmware runs (#20).
+///
+/// A relay or strike driver is held off at boot by its gate pull-down, and
+/// only while the pin itself floats or is pulled low. A pin the boot ROM
+/// drives defeats that: the C3's map put the strike on GPIO21, U0TXD, and by
+/// default the ROM prints its boot messages on UART0 whatever the
+/// application's console is -- so the latch would pulse on every power-up,
+/// crash and update.
+///
+/// UART0 TX is listed for every chip, from each chip's datasheet. The C3 also
+/// lists MTCK (GPIO6), which has a pull-up after reset unless JTAG is disabled
+/// in eFuse (ESP32-C3 datasheet v2.4, table 2-1, note 6). Other chips' reset
+/// pulls are not yet checked pin by pin; add them here as they are.
+#[test]
+fn switching_outputs_avoid_pins_driven_or_pulled_high_at_boot() {
+    const SWITCHING: [&str; 2] = ["relay", "strike"];
+    let unsafe_at_boot: [(&str, &[(u32, &str)]); 4] = [
+        ("esp32c6", &[(16, "U0TXD")]),
+        ("esp32c5", &[(11, "U0TXD")]),
+        (
+            "esp32c3",
+            &[(21, "U0TXD"), (6, "MTCK, pulled up after reset")],
+        ),
+        ("esp32s3", &[(43, "U0TXD")]),
+    ];
+    let src = read("toolguard-fw/src/main.rs");
+    for (chip, pins) in unsafe_at_boot {
+        let map = from_source(&src, chip);
+        for signal in SWITCHING {
+            let pin = map
+                .get(signal)
+                .unwrap_or_else(|| panic!("{chip}: no `{signal}` in the pin map"));
+            if let Some((_, why)) = pins.iter().find(|(p, _)| p == pin) {
+                panic!(
+                    "{chip}: `{signal}` is on GPIO{pin} ({why}), which is driven or \
+                     pulled high before the firmware runs -- it would switch on at boot"
+                );
+            }
+        }
+    }
+}

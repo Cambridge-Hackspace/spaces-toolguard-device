@@ -12,10 +12,12 @@ pulse the platform names; and, on any of them, a stop button anyone may press.
 A door, a tool and a room are the same resource with different bindings (CS:S
 #182), and this box speaks the resource-shaped local wire.
 
-> Work in progress. The protocol core and the display model are host-tested; the
-> firmware compiles for all four chips in CI. **No board has run any of it** —
-> the pin maps for the C5, C3 and S3 in particular compile and nothing more,
-> since none of those boards exists here yet.
+> Work in progress. The protocol core and the display model are host-tested, and
+> the firmware compiles for all four chips in CI. **Only an ESP32-C6 Super Mini
+> has run it**, on the bench: the reader, the panel, a card's round trip to the
+> edge, and an over-the-air update with its rollback. Its stop button, relay,
+> strike and sense input have not been wired yet. The C5, C3 and S3 pin maps
+> compile and nothing more, since none of those boards exists here yet.
 
 ## What it is, and is not
 
@@ -43,7 +45,7 @@ included, which goes through this firmware, a lease and a Wi-Fi link.
 
 The protocol is not redefined here. `Module`, the topics and the wire types come
 from [`spaces-firmware`][sf]'s `spaces-device`, pinned by tag in `Cargo.toml`
-(currently `v0.4.0`), so this box and every other module speak the same wire by
+(currently `v0.8.0`), so this box and every other module speak the same wire by
 construction.
 
 ## The panel is sixteen columns, and that is a design constraint
@@ -153,7 +155,10 @@ Two electrical notes worth having before wiring anything:
 ## License
 
 The firmware is [AGPL-3.0-or-later](LICENSE), matching the platform and
-`spaces-firmware`.
+`spaces-firmware`. One portion has a second copyright: `Reader::poll` in
+`toolguard-fw/src/rc522.rs` is derived from
+[`nfc-522`](https://github.com/Cambridge-Hackspace/nfc-522) and is GPL-3.0;
+that file's header says exactly what.
 
 The hardware, everything under [`hardware/`](hardware/), is
 [CERN-OHL-S-2.0](hardware/LICENSE), the strongly reciprocal CERN Open Hardware

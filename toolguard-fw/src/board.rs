@@ -19,11 +19,21 @@
 //! - **GPIO9** is BOOT, also strapping, and is the hold-for-setup gesture.
 //! - **GPIO12/13** are native USB. The Super Mini has no USB-serial chip, so
 //!   these are the only console there is; losing them loses flashing and logs.
-//! - **GPIO4/5/6/7** are strapping, JTAG and flash-adjacent.
 //!
-//! That leaves IO0–IO3, IO14 and IO18–IO23 freely usable: eleven pins, and
+//! **GPIO4–7 are usable with care, not unavailable.** GPIO4 and GPIO5 are
+//! strapping pins (MTMS, MTDI), sampled at reset and ordinary GPIOs after it;
+//! GPIO6 and GPIO7 are JTAG (MTCK, MTDO), unused while the USB-JTAG is the
+//! debugger. None of them is flash, which on the C6 is GPIO24–30 and not
+//! broken out. The care: nothing may drive 4 or 5 at reset, and GPIO6 has a
+//! pull-up after reset, so it is no place for an output that must stay off.
+//! GPIO7 already carries the powered input.
+//!
+//! IO0–IO3, IO14 and IO18–IO23 are the freely usable set: eleven pins, and
 //! this firmware uses all eleven when every role is wired (seven always; sense,
-//! relay, stop and strike by the roles that need them). The C6's GPIO matrix routes SPI2 and I2C to almost any
+//! relay, stop and strike by the roles that need them). GPIO21–23 are pads in
+//! the middle of the Super Mini rather than edge pins, so they take a fly lead
+//! or a breakout. GPIO4–6 are also the C6's only ADC1 pins that SPI (0–3) does
+//! not hold, which matters if the sensed input ever goes analog (#10). The C6's GPIO matrix routes SPI2 and I2C to almost any
 //! pin, and ESP-IDF is explicit that below 40 MHz routing through the matrix is
 //! no worse than the IOMUX pins — so at 1 MHz this is a pin-budget question and
 //! not a capability one.
