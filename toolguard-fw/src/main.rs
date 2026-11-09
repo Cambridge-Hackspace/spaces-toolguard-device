@@ -243,7 +243,7 @@ fn main() -> anyhow::Result<()> {
     let nvs = EspDefaultNvsPartition::take()?;
     let version = env!("CARGO_PKG_VERSION");
 
-    log::info!("spaces-toolguard-firmware {version} on {}", board::CHIP);
+    log::info!("spaces-toolguard-device {version} on {}", board::CHIP);
 
     // Not on the critical path: `start` is infallible and degrades to a no-op,
     // because a reader with a dead LED should still read cards.

@@ -11,7 +11,7 @@ default-members = ["toolguard-fw"]
 version = "0.3.0"
 edition = "2021"
 license = "AGPL-3.0-or-later"
-repository = "https://github.com/Cambridge-Hackspace/spaces-toolguard-firmware"
+repository = "https://github.com/Cambridge-Hackspace/spaces-toolguard-device"
 rust-version = "1.85"
 
 [workspace.dependencies]

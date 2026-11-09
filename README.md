@@ -1,4 +1,6 @@
-# spaces-toolguard-firmware
+# spaces-toolguard-device
+
+The ToolGuard box: its firmware, and the boards it runs on (`hardware/`).
 
 A generic tool box for [Cooperative Systems: Spaces][css], the access-control
 platform at the [Cambridge Hackspace][hackspace]. One image, configured at
@@ -37,6 +39,7 @@ included, which goes through this firmware, a lease and a Wi-Fi link.
 |---|---|
 | `toolguard-core/` | the box as a `spaces_device::Device`: the glue over `spaces_device::Module`, the display model, and how usage is sensed. No hardware, no I/O, host-tested |
 | `toolguard-fw/` | the ESP-IDF firmware: RC522 over SPI, 1602 over I2C, three chips |
+| `hardware/` | the boards, as atopile and KiCad sources; licensed separately (see below) |
 
 The protocol is not redefined here. `Module`, the topics and the wire types come
 from [`spaces-firmware`][sf]'s `spaces-device`, pinned by tag in `Cargo.toml`
@@ -149,7 +152,13 @@ Two electrical notes worth having before wiring anything:
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE), matching the platform and `spaces-firmware`.
+The firmware is [AGPL-3.0-or-later](LICENSE), matching the platform and
+`spaces-firmware`.
+
+The hardware, everything under [`hardware/`](hardware/), is
+[CERN-OHL-S-2.0](hardware/LICENSE), the strongly reciprocal CERN Open Hardware
+Licence: a software licence says nothing useful about a board someone
+manufactures, and this one does.
 
 [css]: https://github.com/Cambridge-Hackspace/cooperative-systems-spaces
 [hackspace]: https://cambridgehackspace.com
