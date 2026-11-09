@@ -1,25 +1,40 @@
-//! The pin table in `docs/INSTALLING.md` is checked against the firmware.
+//! The board files are checked against the docs, against themselves, and
+//! against what each chip does at boot.
 //!
-//! That document is what somebody follows with a soldering iron, and a pin
-//! table is exactly the kind of thing that drifts: the source moves a signal,
-//! the table does not, and the next person wires a relay to the I²C clock. The
-//! failure is expensive and silent until the smoke.
+//! `toolguard-fw/boards/<board>.toml` is each board's pin map, and the
+//! firmware's pin assignment is generated from it (`toolguard-fw/build.rs`),
+//! so these files ARE what the firmware does.
 //!
-//! So the mapping is written twice on purpose -- once in the firmware as a
-//! `cfg`-gated tuple, once in the document as a table -- and this compares
-//! them. Deriving the table from the source would make the check agree with
-//! itself; the duplication **is** the check.
+//! The table in `docs/INSTALLING.md` is what somebody follows with a soldering
+//! iron, and a pin table is exactly the kind of thing that drifts: the source
+//! moves a signal, the table does not, and the next person wires a relay to
+//! the I²C clock. The failure is expensive and silent until the smoke. So the
+//! mapping is written twice on purpose -- once in the board files, once in the
+//! document -- and this compares them. Deriving the table from the files would
+//! make the check agree with itself; the duplication **is** the check.
 //!
-//! **Why it lives in `toolguard-core` and reads `toolguard-fw` as text.** The
-//! pins are concrete `esp-idf-hal` types behind plain trait bounds, so the
-//! firmware crate only compiles for an ESP target and nothing that runs on a
-//! host can link against it. A text comparison is what is available, and it is
-//! enough: the question is whether two written-down mappings agree.
+//! **Why it lives in `toolguard-core`.** The firmware crate only compiles for an
+//! ESP target, and nothing that runs on a host can link against it. The board
+//! files are plain data, so a host test reads them directly.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-const CHIPS: [&str; 4] = ["esp32c6", "esp32c5", "esp32c3", "esp32s3"];
+/// Every board, as `(board, chip)`. Kept in step with `BOARDS` in build.rs by
+/// [`every_board_file_is_listed_and_every_listed_board_has_a_file`].
+const BOARDS: [(&str, &str); 4] = [
+    ("c6-supermini", "esp32c6"),
+    ("c5-devkitc1", "esp32c5"),
+    ("c3-supermini", "esp32c3"),
+    ("s3-devkitc1", "esp32s3"),
+];
+
+/// The roles every board has, as build.rs requires them.
+const REQUIRED: [&str; 13] = [
+    "light", "setup", "sclk", "mosi", "miso", "cs", "rst", "sda", "scl", "sense", "relay", "stop",
+    "strike",
+];
+const OPTIONAL: [&str; 1] = ["powered"];
 
 fn repo_root() -> PathBuf {
     // CARGO_MANIFEST_DIR is this package; the repository is its parent.
@@ -34,67 +49,45 @@ fn read(rel: &str) -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
 }
 
-/// `signal -> pin number`, from the `cfg`-gated tuple for one chip.
-///
-/// Anchored on the `#[cfg(<chip>)]` attribute and closed at the `);` that ends
-/// the value list, so a second tuple elsewhere in the file cannot be read by
-/// accident.
-fn from_source(src: &str, chip: &str) -> BTreeMap<String, u32> {
-    let attr = format!("#[cfg({chip})]");
-    let start = src
-        .find(&attr)
-        .unwrap_or_else(|| panic!("no `{attr}` in the firmware; the pin map moved"));
-    let rest = &src[start..];
-    let end = rest
-        .find(");")
-        .unwrap_or_else(|| panic!("the tuple after `{attr}` is unterminated"));
-    let block = &rest[..end];
-
-    let names_open = block.find("let (").expect("no `let (` after the cfg") + "let (".len();
-    let names_close = block[names_open..]
-        .find(')')
-        .expect("the name list is unterminated")
-        + names_open;
-    let names: Vec<String> = block[names_open..names_close]
-        .split(',')
-        .map(|n| n.trim())
-        .filter(|n| !n.is_empty())
-        // The firmware calls two of them `*_pin`; the document drops the
-        // suffix, because a table column headed "light_pin" reads oddly to
-        // somebody holding a board.
-        .map(|n| n.trim_end_matches("_pin").to_string())
-        .collect();
-
-    let values: Vec<u32> = block[names_close..]
-        .split("pins.gpio")
-        .skip(1)
-        .map(|chunk| {
-            let digits: String = chunk.chars().take_while(char::is_ascii_digit).collect();
-            digits
-                .parse()
-                .unwrap_or_else(|_| panic!("could not read a pin number from {chunk:?}"))
-        })
-        .collect();
-
-    assert_eq!(
-        names.len(),
-        values.len(),
-        "{chip}: {} names but {} pins -- the tuple and its value list disagree, \
-         which is a firmware bug and not a documentation one",
-        names.len(),
-        values.len()
-    );
-    assert!(
-        names.len() >= 9,
-        "{chip}: only {} pins parsed; the tuple shape changed and this parser \
-         is now reading something else",
-        names.len()
-    );
-    names.into_iter().zip(values).collect()
+/// A board file, as build.rs reads it.
+struct Board {
+    chip: String,
+    pins: BTreeMap<String, u32>,
 }
 
-/// `signal -> pin number`, from the markdown table for one chip.
-fn from_doc(doc: &str, chip: &str) -> BTreeMap<String, u32> {
+fn parse_board(name: &str, text: &str) -> Board {
+    let file: toml::Table = text
+        .parse()
+        .unwrap_or_else(|e| panic!("{name}: not valid TOML: {e}"));
+    let named = file.get("board").and_then(|v| v.as_str());
+    assert_eq!(named, Some(name), "{name}.toml names itself {named:?}");
+    let chip = file
+        .get("chip")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| panic!("{name}: no chip"))
+        .to_string();
+    let pins = file
+        .get("pins")
+        .and_then(|v| v.as_table())
+        .unwrap_or_else(|| panic!("{name}: no [pins] table"))
+        .iter()
+        .map(|(role, v)| {
+            let gpio = v
+                .as_integer()
+                .and_then(|n| u32::try_from(n).ok())
+                .unwrap_or_else(|| panic!("{name}: `{role}` is not a GPIO number"));
+            (role.clone(), gpio)
+        })
+        .collect();
+    Board { chip, pins }
+}
+
+fn board(name: &str) -> Board {
+    parse_board(name, &read(&format!("toolguard-fw/boards/{name}.toml")))
+}
+
+/// `signal -> pin number`, from the markdown table for one board.
+fn from_doc(doc: &str, board: &str) -> BTreeMap<String, u32> {
     let marker = "<!-- PINMAP:";
     let start = doc
         .find(marker)
@@ -108,8 +101,8 @@ fn from_doc(doc: &str, chip: &str) -> BTreeMap<String, u32> {
     let column = header
         .split('|')
         .map(str::trim)
-        .position(|c| c == chip)
-        .unwrap_or_else(|| panic!("the table has no `{chip}` column"));
+        .position(|c| c == board)
+        .unwrap_or_else(|| panic!("the table has no `{board}` column"));
 
     let mut out = BTreeMap::new();
     for line in table.lines().skip_while(|l| !std::ptr::eq(*l, header)) {
@@ -137,90 +130,134 @@ fn from_doc(doc: &str, chip: &str) -> BTreeMap<String, u32> {
 }
 
 #[test]
-fn the_documented_pin_table_matches_the_firmware() {
-    let src = read("toolguard-fw/src/main.rs");
+fn the_documented_pin_table_matches_the_board_files() {
     let doc = read("docs/INSTALLING.md");
-
-    for chip in CHIPS {
-        let from_code = from_source(&src, chip);
-        let documented = from_doc(&doc, chip);
+    for (name, _) in BOARDS {
+        let pins = board(name).pins;
+        let documented = from_doc(&doc, name);
         assert!(
             !documented.is_empty(),
-            "{chip}: parsed no pins out of the document, so the comparison \
+            "{name}: parsed no pins out of the document, so the comparison \
              below would pass over an empty set"
         );
         assert_eq!(
-            documented, from_code,
-            "{chip}: the pin table in docs/INSTALLING.md and the tuple in \
-             toolguard-fw/src/main.rs disagree.\n  documented: {documented:?}\n  \
-             firmware:   {from_code:?}\n\nSomebody follows that table with a \
-             soldering iron."
+            documented, pins,
+            "{name}: the pin table in docs/INSTALLING.md and \
+             toolguard-fw/boards/{name}.toml disagree.\n  documented: \
+             {documented:?}\n  board file: {pins:?}\n\nSomebody follows that \
+             table with a soldering iron."
         );
     }
 }
 
-/// Both parsers must be capable of disagreeing, or the comparison above is two
-/// empty maps matching.
+/// What build.rs refuses, checked on the host too, so a bad board file fails
+/// `cargo test` and not only a firmware build nobody ran for that board.
 #[test]
-fn the_parsers_report_only_what_they_are_given() {
-    let src = "\
-    #[cfg(esp32c6)]
-    let (light_pin, setup_pin, sclk) = (
-        pins.gpio8,
-        pins.gpio9,
-        pins.gpio0,
-    );";
-    // Nine is the real floor; this fixture is deliberately shorter, so the
-    // shape assertion has to be the thing that rejects it.
-    let short = std::panic::catch_unwind(|| from_source(src, "esp32c6"));
-    assert!(
-        short.is_err(),
-        "a three-pin tuple was accepted, so a parser that found only part of \
-         the real map would pass silently"
+fn every_board_file_is_complete_and_names_each_gpio_once() {
+    for (name, chip) in BOARDS {
+        let b = board(name);
+        assert_eq!(b.chip, chip, "{name}: chip");
+        for role in REQUIRED {
+            assert!(b.pins.contains_key(role), "{name}: no pin for `{role}`");
+        }
+        for role in b.pins.keys() {
+            assert!(
+                REQUIRED.contains(&role.as_str()) || OPTIONAL.contains(&role.as_str()),
+                "{name}: `{role}` is not a role the firmware has"
+            );
+        }
+        let mut seen: BTreeMap<u32, &str> = BTreeMap::new();
+        for (role, gpio) in &b.pins {
+            if let Some(other) = seen.insert(*gpio, role) {
+                panic!("{name}: GPIO{gpio} is both `{other}` and `{role}`");
+            }
+        }
+    }
+}
+
+#[test]
+fn every_board_file_is_listed_and_every_listed_board_has_a_file() {
+    let dir = repo_root().join("toolguard-fw/boards");
+    let mut on_disk: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("cannot list {}: {e}", dir.display()))
+        .filter_map(|e| {
+            let p = e.ok()?.path();
+            if p.extension()? != "toml" {
+                return None;
+            }
+            Some(p.file_stem()?.to_string_lossy().into_owned())
+        })
+        .collect();
+    on_disk.sort();
+    let mut listed: Vec<String> = BOARDS.iter().map(|(b, _)| b.to_string()).collect();
+    listed.sort();
+    assert_eq!(
+        on_disk, listed,
+        "the board files and this test's BOARDS differ"
     );
 
+    // And build.rs's own list, which decides what BOARD may be.
+    let build = read("toolguard-fw/build.rs");
+    for b in &listed {
+        assert!(
+            build.contains(&format!("\"{b}\"")),
+            "build.rs does not list `{b}`, so BOARD={b} would be refused"
+        );
+    }
+}
+
+/// The parser must be capable of disagreeing, or the comparison above is two
+/// empty maps matching.
+#[test]
+fn the_doc_parser_reports_only_what_it_is_given() {
     let doc = "\
 <!-- PINMAP: x -->
 
-| signal | esp32c6 | esp32c5 | esp32c3 | esp32s3 |
+| signal | c6-supermini | c5-devkitc1 | c3-supermini | s3-devkitc1 |
 |---|---|---|---|---|
 | light | 8 | 27 | 7 | 48 |
 | relay | 19 | 9 | 3 | 16 |
 ";
-    let c6 = from_doc(doc, "esp32c6");
+    let c6 = from_doc(doc, "c6-supermini");
     assert_eq!(c6.get("light"), Some(&8));
     assert_eq!(c6.get("relay"), Some(&19));
     // And it reads the right COLUMN, which a parser that always took the first
-    // number would get wrong on exactly one chip.
+    // number would get wrong on exactly one board.
     assert_eq!(
-        from_doc(doc, "esp32c3").get("light"),
+        from_doc(doc, "c3-supermini").get("light"),
         Some(&7),
-        "the column lookup is not per chip"
+        "the column lookup is not per board"
     );
-    assert_eq!(from_doc(doc, "esp32s3").get("light"), Some(&48));
-    // A column inserted in the MIDDLE of the table must not shift its
-    // neighbours: the C5 went in between the C6 and the C3.
-    assert_eq!(from_doc(doc, "esp32c5").get("light"), Some(&27));
-    assert_eq!(from_doc(doc, "esp32c5").get("relay"), Some(&9));
+    assert_eq!(from_doc(doc, "s3-devkitc1").get("light"), Some(&48));
+    assert_eq!(from_doc(doc, "c5-devkitc1").get("relay"), Some(&9));
 }
 
 /// And a transposed pin must fail, which is the defect this exists for.
 #[test]
 fn a_transposed_pin_is_caught() {
-    let src = read("toolguard-fw/src/main.rs");
-    let from_code = from_source(&src, "esp32c6");
+    let pins = board("c6-supermini").pins;
     let doc = read("docs/INSTALLING.md");
-    let mut documented = from_doc(&doc, "esp32c6");
+    let mut documented = from_doc(&doc, "c6-supermini");
 
     let sda = *documented.get("sda").expect("sda should be documented");
     let scl = *documented.get("scl").expect("scl should be documented");
     documented.insert("sda".into(), scl);
     documented.insert("scl".into(), sda);
     assert_ne!(
-        documented, from_code,
+        documented, pins,
         "swapping SDA and SCL in the documented table still compared equal, so \
          this check would not notice the table drifting"
     );
+}
+
+/// A board file naming one GPIO twice is refused.
+#[test]
+fn a_gpio_named_twice_is_caught() {
+    let text = "board = \"x\"\nchip = \"esp32c6\"\n[pins]\nsda = 22\nscl = 22\n";
+    let b = parse_board("x", text);
+    let mut seen = std::collections::BTreeSet::new();
+    let twice = b.pins.values().any(|g| !seen.insert(*g));
+    assert!(twice, "the duplicate in the fixture was not seen");
 }
 
 /// The outputs that switch something must not sit on a pin the chip drives,
@@ -249,16 +286,21 @@ fn switching_outputs_avoid_pins_driven_or_pulled_high_at_boot() {
         ),
         ("esp32s3", &[(43, "U0TXD")]),
     ];
-    let src = read("toolguard-fw/src/main.rs");
-    for (chip, pins) in unsafe_at_boot {
-        let map = from_source(&src, chip);
+    for (name, _) in BOARDS {
+        let b = board(name);
+        let pins = unsafe_at_boot
+            .iter()
+            .find(|(chip, _)| *chip == b.chip)
+            .map(|(_, p)| *p)
+            .unwrap_or_else(|| panic!("{name}: no boot-safety list for {}", b.chip));
         for signal in SWITCHING {
-            let pin = map
+            let pin = b
+                .pins
                 .get(signal)
-                .unwrap_or_else(|| panic!("{chip}: no `{signal}` in the pin map"));
+                .unwrap_or_else(|| panic!("{name}: no `{signal}` in the pin map"));
             if let Some((_, why)) = pins.iter().find(|(p, _)| p == pin) {
                 panic!(
-                    "{chip}: `{signal}` is on GPIO{pin} ({why}), which is driven or \
+                    "{name}: `{signal}` is on GPIO{pin} ({why}), which is driven or \
                      pulled high before the firmware runs -- it would switch on at boot"
                 );
             }

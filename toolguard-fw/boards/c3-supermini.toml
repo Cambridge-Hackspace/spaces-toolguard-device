@@ -1,0 +1,38 @@
+# ESP32-C3 Super Mini. UNTESTED: no C3 here, so this compiles and nothing more.
+# Same strapping pair (8 and 9) as the C6; USB is on 18/19 rather than 12/13.
+#
+# The single source of this board's pin map; see c6-supermini.toml.
+
+board = "c3-supermini"
+chip = "esp32c3"
+
+[pins]
+light = 8
+setup = 9
+sclk = 10
+mosi = 7
+miso = 6
+cs = 5
+# rst is GPIO21, U0TXD, and the strike is not (#20). The console is native USB
+# on 18/19, but that does not free UART0's TX at boot: by default
+# (EFUSE_UART_PRINT_CONTROL = 0) the ROM prints its messages on UART0 whatever
+# the application's console is, and the datasheet lists U0TXD as
+# output-enabled with a pull-up after reset. A latch driver there would pulse
+# the door open on every power-up, crash and update, before the firmware runs.
+# The RC522's reset is the one output here that does not care: toggling it
+# during boot only resets a reader the firmware resets again anyway.
+rst = 21
+sda = 1
+scl = 0
+sense = 2
+relay = 3
+# GPIO20 is U0RXD: an input with a pull-up after reset, which the ROM does not
+# drive, so the stop button is safe there.
+stop = 20
+# GPIO4 (MTMS): input-enabled with no pull at reset and not driven by the ROM,
+# so the driver's gate pull-down holds it off until the firmware drives it low.
+# Not GPIO6 (MTCK), which has a pull-up after reset unless JTAG is disabled in
+# eFuse.
+strike = 4
+# No powered input: every usable pin is taken. "Machine powered by: input"
+# falls back to seen-idle, and says so.

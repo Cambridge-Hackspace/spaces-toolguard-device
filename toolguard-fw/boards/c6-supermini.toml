@@ -1,0 +1,33 @@
+# ESP32-C6 Super Mini: the board on the bench, and the only one that has run
+# this firmware. Why these pins, and which are traps, is in board.rs.
+#
+# The single source of this board's pin map: build.rs generates the firmware's
+# pin assignment from it, and toolguard-core/tests/pinmap.rs checks it against
+# docs/INSTALLING.md and against the pins the chip drives at boot.
+
+board = "c6-supermini"
+chip = "esp32c6"
+
+[pins]
+light = 8   # the board's RGB LED, and a strapping pin download mode needs high
+setup = 9   # BOOT, a strapping pin, and the hold-for-setup gesture
+sclk = 0
+mosi = 1
+miso = 2
+cs = 3
+rst = 18
+sda = 22    # GPIO21-23 are pads in the middle of the board, not edge pins
+scl = 23
+# sense, relay, stop and strike take the four left in the freely usable set
+# (IO0-3, IO14, IO18-23), which uses it up. GPIO4-7 are the reserve (strapping
+# and JTAG, usable once booted), and 7 carries powered. None of these four can
+# do ADC: on the C6 that is GPIO0-6, SPI holds 0-3, and an analog sense input
+# would need 4-6 (#10) -- so the sensed input is digital, which is what an
+# optoisolated enable line gives anyway.
+sense = 14
+relay = 19
+stop = 20   # a switch to GND on the internal pull-up
+strike = 21 # an output to a latch driver (CS:S #182), driven low at boot
+# The powered input (#8): an edge pin, neither a strapping pin nor one of the
+# ADC pins (GPIO0-6) an analog source would want.
+powered = 7
