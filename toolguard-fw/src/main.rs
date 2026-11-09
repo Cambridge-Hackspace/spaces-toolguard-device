@@ -15,8 +15,8 @@
 //!
 //! ## What is reader-specific
 //!
-//! The roles it declares, the one setting it adds (its tool), the peripherals,
-//! and [`Hardware`]: what the core's decisions are carried out on. The loop
+//! The roles it declares (from its settings), the settings it adds to the
+//! setup page ([`settings`]), the peripherals, and [`Hardware`]: what the core's decisions are carried out on. The loop
 //! that runs the box is spaces-device-espidf's `run()`, the same one every
 //! device runs (#18).
 
@@ -51,13 +51,6 @@ mod settings;
 /// is mostly idle.
 const POLL_MS: u64 = 75;
 
-/// This device reads cards. It switches nothing.
-///
-/// `capabilities.roles` is the device's own claim about itself, and the server
-/// lets an administrator bind it in any role it declares — so claiming `power`
-/// here would let someone make a reader with no relay the thing that energizes
-/// a machine, and the mistake surfaces at the far end of the system as a tool
-/// that never comes on.
 /// The tool this box guards. The rest of what it is lives in [`settings`],
 /// which is read from the same store.
 const TOOL_FIELD: &[Field] = &[Field {
@@ -120,9 +113,12 @@ fn main() -> anyhow::Result<()> {
         pins.gpio23,
         // All four from the freely usable set (IO0-3, IO14, IO18-23), which
         // SPI and I2C leave 14, 19, 20 and 21 of -- and these take all four,
-        // so a C6 Super Mini is full. None can do ADC: on the C6 that is
-        // GPIO0-6 only, and SPI has all of those -- so a sensed input here is
-        // digital, which is what an optoisolated enable line gives anyway. The
+        // which uses that set up. GPIO4-7 are the reserve (strapping and JTAG,
+        // usable once booted; see board.rs), and 7 carries powered below. None
+        // of these four can do ADC: on the C6 that is GPIO0-6, SPI holds 0-3,
+        // and an analog sense input would need 4-6 (#10) -- so a sensed input
+        // here is digital, which is what an optoisolated enable line gives
+        // anyway. The
         // stop button is a switch to GND on the internal pull-up; the strike
         // is an output to a latch driver (CS:S #182), driven low at boot.
         pins.gpio14,

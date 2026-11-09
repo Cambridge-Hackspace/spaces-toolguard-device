@@ -26,7 +26,7 @@
 //! and takes the default mode 0. That works on the C3 it targets and is the
 //! documented failure case on the S3, where ESP-IDF samples MISO on the wrong
 //! edge and every register read is corrupted while writes still land. See
-//! [`crate::board::SPI_MODE_3`].
+//! [`crate::board::SPI_MODE`].
 //!
 //! **The cooldown lives in the core, not here.** `nfc-522` debounces in the
 //! driver; this crate keeps the decision in `toolguard_core::reader`, where it
@@ -98,7 +98,7 @@ pub fn start<'d, SPI: SpiAnyPins + 'd>(
     let driver = SpiDriver::new(spi, sclk, mosi, Some(miso), &DriverConfig::new())
         .context("SPI bus for the RC522")?;
 
-    // Mode 3 explicitly. See board::SPI_MODE_3 -- mode 0 is the documented S3
+    // Mode 3 explicitly. See board::SPI_MODE -- mode 0 is the documented S3
     // corruption and the default if nothing says otherwise.
     let config = SpiConfig::new()
         .baudrate(Hertz(board::SPI_HZ))

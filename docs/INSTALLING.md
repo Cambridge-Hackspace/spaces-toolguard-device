@@ -174,6 +174,19 @@ Three things follow, and each changes a setting in §6:
   that is off when the member signs on, not one switched off during the
   session.
 
+### Never wire into the controller's safety inputs
+
+The controller has inputs that are the machine's own protection, and nothing
+from this box connects to them, in either wiring mode: on the RDC644x family,
+**CN2 `DrProc`** (door or lid protection) and **CN5 `WP1`** (water
+protection). Those are what stop the laser when the lid opens or the cooling
+fails. They belong to the machine's maker and its safety case, not to an access
+system (§1).
+
+Check the labels printed on the actual controller before wiring anything. The
+Hackspace's machine manual and its controller manual name different models in
+the same family, and connector numbering can differ between them.
+
 ---
 
 ## 4. Wiring
@@ -339,11 +352,18 @@ Seven are always used; **sense**, **relay**, **stop**, **strike** and
 | **GPIO8** | the RGB LED *and* a strapping pin — download mode needs it high |
 | **GPIO9** | BOOT, a strapping pin, and the hold-for-setup gesture |
 | **GPIO12 / GPIO13** | **native USB, and the only console there is.** This board has no USB-serial chip, so losing these loses flashing *and* logs |
-| **GPIO4–7** | strapping, JTAG and flash-adjacent |
 
 Freely usable on that board: IO0–IO3, IO14, IO18–IO23. SPI and I²C take seven of
-them, which is why sense, relay, stop and strike are 14, 19, 20 and 21 — and
-with all four roles wired a C6 Super Mini has no pin left.
+them, which is why sense, relay, stop and strike are 14, 19, 20 and 21, and with
+all four roles wired that set is used up. **GPIO21–23 are pads in the middle of
+the board, not edge pins:** solder a fly lead or use a breakout.
+
+The board is not full, though. **GPIO4–7 are usable with care:** 4 and 5 are
+strapping pins (sampled at reset, ordinary pins after), 6 and 7 are JTAG
+(unused while USB-JTAG is the debugger). Nothing may drive 4 or 5 at reset, and
+GPIO6 has a pull-up after reset, so it is no place for an output that must stay
+off. GPIO7 already carries **powered**. None of them is flash, which on the C6
+is GPIO24–30 and not broken out.
 
 ### Do not move these on an ESP32-C5
 
@@ -366,11 +386,12 @@ A C5 board with no UART bridge gets GPIO11/12 back. The C5's gains over the C6
 are its 5 GHz radio and that **sense is on GPIO1 = ADC1_CH0**, so this is the one
 pin map on which an analog sense input would be possible.
 
-### The sensed input is digital, and cannot be analog here
+### The sensed input is digital
 
-On the ESP32-C6, ADC1 is **GPIO0–GPIO6 only**, and SPI occupies all of those. So
-there is no ADC pin left for a sense input on the C6 pin map (the C5 map above
-is the exception, and the firmware does not use it yet). That is no loss for
+On the ESP32-C6, ADC1 is **GPIO0–GPIO6 only**. SPI holds 0–3 and the C6 map
+puts sense on GPIO14, which is not an ADC pin; an analog sense input on a C6
+would mean moving it to GPIO4–6 (#10). The C5 map above already has sense on an
+ADC pin, and the firmware does not use that yet either. That is no loss for
 an optoisolated enable line, which is a logic signal — but it does mean you
 cannot put a current-clamp straight onto this board without an external I²C ADC
 on the existing bus.
