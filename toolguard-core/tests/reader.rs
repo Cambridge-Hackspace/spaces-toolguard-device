@@ -591,7 +591,7 @@ fn door_box() -> Reader {
 }
 
 fn yes_with_strike(pulse_ms: u64) -> Vec<u8> {
-    serde_json::json!({"resource": "front-door", "authorized": true, "strike": {"pulse_ms": pulse_ms}})
+    serde_json::json!({"resource": "front-door", "authorized": true, "reason": "authorized", "strike": {"pulse_ms": pulse_ms}})
         .to_string()
         .into_bytes()
 }
