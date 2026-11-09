@@ -51,15 +51,6 @@ pub enum Action {
     /// For the log, and for a human reading it later. Never for the panel: the
     /// panel has sixteen columns and these do not fit.
     Note(String),
-    /// Something is now open, or nothing is: a question out to the edge, a
-    /// session, or the tool energized. Emitted only on change.
-    ///
-    /// For the firmware-update guard, which refuses an update while anything is
-    /// open: a box restarting mid-session drops the tool's power if it switches
-    /// it, and comes back up knowing nothing of the session it had, which then
-    /// nobody releases. A question in flight counts too, because a restart
-    /// between it and its answer is a yes nobody acts on.
-    InSession(bool),
 }
 
 /// How long an outcome stays on the panel before it returns to the resting
@@ -93,8 +84,6 @@ pub struct Reader {
     /// Whether the tool output is on, as last driven. A plug owns no session
     /// and reports no outcomes, so for it this is what "open" means.
     tool_on: bool,
-    /// What [`Action::InSession`] last said.
-    in_session: bool,
     /// Shown on the resting screen in place of the clock; see
     /// [`Reader::notice`].
     notice: Option<String>,
@@ -119,7 +108,6 @@ impl Reader {
             showing_until: None,
             last_card: None,
             tool_on: false,
-            in_session: false,
             notice: None,
         }
     }
@@ -128,6 +116,16 @@ impl Reader {
     /// input's level alone.
     pub fn sensing(mut self, source: Source, powered: Powered) -> Self {
         self.sense = Sense::new(source, powered);
+        self
+    }
+
+    /// The address this box was given, and that its network is up: what the
+    /// shell knows once `boot()` has returned, before the loop that runs the
+    /// box starts. The loop then reports the link, which it knows, and never
+    /// the address, which it does not.
+    pub fn joined(mut self, address: impl Into<String>) -> Self {
+        self.health.address = Some(address.into());
+        self.health.wifi = true;
         self
     }
 
@@ -154,6 +152,41 @@ impl Reader {
     /// What the module is doing, for a shell that drives a status light.
     pub fn activity(&self) -> Activity {
         self.module.activity()
+    }
+
+    /// Whether anything is open: a question out to the edge, a session, or the
+    /// tool energized. An update waits while it is.
+    ///
+    /// A box restarting mid-session drops the tool's power if it switches it,
+    /// and comes back up knowing nothing of the session it had, which then
+    /// nobody releases. A question in flight counts too, because a restart
+    /// between it and its answer is a yes nobody acts on. The loop that runs
+    /// this box asks after every step and tells the updater on a change
+    /// (`spaces_device::Driver`).
+    pub fn in_session(&self) -> bool {
+        self.tool_on || self.module.activity() != Activity::Idle
+    }
+
+    /// The link changed: Wi-Fi and the broker, as the loop sees them. The
+    /// address and the clock, which the loop does not know, are kept.
+    pub fn link(&mut self, wifi: bool, broker: bool, now: u64) -> Vec<Action> {
+        let health = Health {
+            wifi,
+            broker,
+            ..self.health.clone()
+        };
+        let mut out = self.tick(now);
+        out.extend(self.health(health, now));
+        out
+    }
+
+    /// The wall clock for the resting screen, as `HH:MM`, when it is known.
+    pub fn clock(&mut self, clock: Option<String>, now: u64) -> Vec<Action> {
+        let health = Health {
+            clock,
+            ..self.health.clone()
+        };
+        self.health(health, now)
     }
 
     /// Put the outputs in a known state and send the first heartbeat.
@@ -323,9 +356,6 @@ impl Reader {
     /// else is on it, so news about the network cannot wipe a verdict the
     /// member is still reading.
     fn refresh(&mut self, now: u64, out: &mut Vec<Action>) {
-        // First, and not behind the outcome hold below: whether a session is
-        // open does not wait for the member to finish reading the panel.
-        self.settle_session(out);
         if let Some(until) = self.showing_until {
             if now < until {
                 return;
@@ -354,15 +384,6 @@ impl Reader {
             }
         };
         self.show(screen, out);
-    }
-
-    /// Say whether anything is open, when that has changed.
-    fn settle_session(&mut self, out: &mut Vec<Action>) {
-        let open = self.tool_on || self.module.activity() != Activity::Idle;
-        if open != self.in_session {
-            self.in_session = open;
-            out.push(Action::InSession(open));
-        }
     }
 
     /// Emit a redraw only when the content actually changes.

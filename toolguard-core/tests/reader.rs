@@ -663,27 +663,21 @@ fn a_door_boxs_stop_button_releases_the_resource_without_a_card() {
 
 // ------------------------------------- whether an update may restart the box
 
-/// Follows `Action::InSession` through a run of calls, as the firmware's
-/// update guard does: the last report wins, and no report means no change.
-#[derive(Default)]
-struct Guard(bool);
-
-impl Guard {
-    fn saw(&mut self, out: &[Action]) -> bool {
-        for a in out {
-            if let Action::InSession(open) = a {
-                self.0 = *open;
-            }
-        }
-        self.0
-    }
+/// Make a call on the reader, then ask whether the box is open, as the loop
+/// that runs it does after every step: the session is a query on the reader,
+/// not an action it emits (#18).
+macro_rules! saw {
+    ($r:ident . $($call:tt)*) => {{
+        let _ = $r.$($call)*;
+        $r.in_session()
+    }};
 }
 
 /// A session opened by Alice's card on `r` at 100, answered yes at 200.
-fn signed_in(r: &mut Reader, g: &mut Guard) {
-    g.saw(&r.card(ALICE, 100));
+fn signed_in(r: &mut Reader) {
+    saw!(r.card(ALICE, 100));
     assert!(
-        g.saw(&r.message(topic::SCAN_RESPONSE, &yes(), 200)),
+        saw!(r.message(topic::SCAN_RESPONSE, &yes(), 200)),
         "a yes did not open a session for the update guard"
     );
 }
@@ -692,20 +686,22 @@ fn signed_in(r: &mut Reader, g: &mut Guard) {
 fn a_question_out_to_the_edge_already_holds_off_an_update() {
     // A restart between the question and its answer is a yes nobody acts on.
     let mut r = reader();
-    let mut g = Guard::default();
-    assert!(g.saw(&r.card(ALICE, 100)), "asking did not count as open");
+    assert!(saw!(r.card(ALICE, 100)), "asking did not count as open");
 }
 
 #[test]
 fn a_refusal_or_no_answer_leaves_nothing_open() {
     let mut r = reader();
-    let mut g = Guard::default();
-    g.saw(&r.card(ALICE, 100));
-    assert!(!g.saw(&r.message(topic::SCAN_RESPONSE, &no("Unknown card"), 200)));
+    saw!(r.card(ALICE, 100));
+    assert!(!saw!(r.message(
+        topic::SCAN_RESPONSE,
+        &no("Unknown card"),
+        200
+    )));
 
-    g.saw(&r.card(BOB, 1_000));
+    saw!(r.card(BOB, 1_000));
     assert!(
-        !g.saw(&r.tick(1_000 + 5_000)),
+        !saw!(r.tick(1_000 + 5_000)),
         "a question nobody answered left the box held open"
     );
 }
@@ -713,9 +709,8 @@ fn a_refusal_or_no_answer_leaves_nothing_open() {
 #[test]
 fn a_card_that_is_not_sent_opens_nothing() {
     let mut r = Reader::new(Config::switches_nothing(ME, TOOL));
-    let mut g = Guard::default();
-    g.saw(&r.start(0));
-    g.saw(&r.health(
+    saw!(r.start(0));
+    saw!(r.health(
         Health {
             wifi: true,
             broker: false,
@@ -724,33 +719,30 @@ fn a_card_that_is_not_sent_opens_nothing() {
         },
         0,
     ));
-    assert!(!g.saw(&r.card(ALICE, 100)));
+    assert!(!saw!(r.card(ALICE, 100)));
 }
 
 #[test]
 fn every_way_a_session_ends_closes_it_for_the_update_guard() {
     // A second tap.
     let mut r = reader();
-    let mut g = Guard::default();
-    signed_in(&mut r, &mut g);
+    signed_in(&mut r);
     assert!(
-        !g.saw(&r.card(ALICE, 100 + SAME_CARD_COOLDOWN_MS + 1)),
+        !saw!(r.card(ALICE, 100 + SAME_CARD_COOLDOWN_MS + 1)),
         "tap off"
     );
 
     // The stop button.
     let mut r = reader();
-    let mut g = Guard::default();
-    signed_in(&mut r, &mut g);
-    assert!(!g.saw(&r.tool_off(30_000)), "stop button");
+    signed_in(&mut r);
+    assert!(!saw!(r.tool_off(30_000)), "stop button");
 
     // A lease that lapses, on a box that switches the tool: open from the yes,
     // through the lease, until it runs out.
     let mut r = gating_reader();
-    let mut g = Guard::default();
-    signed_in(&mut r, &mut g);
-    assert!(g.saw(&r.message(topic::LEASE, &lease(2_000), 300)));
-    assert!(!g.saw(&r.tick(300 + 2_001)), "lease lapse");
+    signed_in(&mut r);
+    assert!(saw!(r.message(topic::LEASE, &lease(2_000), 300)));
+    assert!(!saw!(r.tick(300 + 2_001)), "lease lapse");
 
     // The longest session.
     let mut config = Config::switches_nothing(ME, TOOL);
@@ -758,10 +750,9 @@ fn every_way_a_session_ends_closes_it_for_the_update_guard() {
     let mut r = Reader::new(config);
     r.start(0);
     r.health(online(), 0);
-    let mut g = Guard::default();
-    signed_in(&mut r, &mut g);
-    assert!(g.saw(&r.tick(200 + 59_000)));
-    assert!(!g.saw(&r.tick(200 + 60_000)), "max session");
+    signed_in(&mut r);
+    assert!(saw!(r.tick(200 + 59_000)));
+    assert!(!saw!(r.tick(200 + 60_000)), "max session");
 
     // Idle too long, on a box that senses the machine.
     let mut config = Config::switches_nothing(ME, TOOL);
@@ -770,16 +761,18 @@ fn every_way_a_session_ends_closes_it_for_the_update_guard() {
     let mut r = Reader::new(config);
     r.start(0);
     r.health(online(), 0);
-    let mut g = Guard::default();
-    signed_in(&mut r, &mut g);
-    assert!(!g.saw(&r.tick(200 + 31_000)), "idle end");
+    signed_in(&mut r);
+    assert!(!saw!(r.tick(200 + 31_000)), "idle end");
 
     // A door box: the session is the pulse.
     let mut r = door_box();
-    let mut g = Guard::default();
-    g.saw(&r.card(ALICE, 100));
-    assert!(g.saw(&r.message(topic::SCAN_RESPONSE, &yes_with_strike(4200), 200)));
-    assert!(!g.saw(&r.tick(4400)), "door pulse");
+    saw!(r.card(ALICE, 100));
+    assert!(saw!(r.message(
+        topic::SCAN_RESPONSE,
+        &yes_with_strike(4200),
+        200
+    )));
+    assert!(!saw!(r.tick(4400)), "door pulse");
 }
 
 #[test]
@@ -787,27 +780,38 @@ fn a_plug_is_open_exactly_while_it_is_energized() {
     // A plug owns no session and reports no outcomes; its relay is all there
     // is to go on.
     let mut r = Reader::new(Config::power_only(ME, TOOL));
-    let mut g = Guard::default();
-    g.saw(&r.start(0));
-    g.saw(&r.health(online(), 0));
-    assert!(!g.0);
-    assert!(
-        g.saw(&r.message(topic::LEASE, &lease(2_000), 100)),
-        "leased"
-    );
-    assert!(!g.saw(&r.tick(100 + 2_001)), "lease lapsed");
+    saw!(r.start(0));
+    saw!(r.health(online(), 0));
+    assert!(!r.in_session());
+    assert!(saw!(r.message(topic::LEASE, &lease(2_000), 100)), "leased");
+    assert!(!saw!(r.tick(100 + 2_001)), "lease lapsed");
 }
 
 #[test]
-fn the_update_guard_is_told_only_on_a_change() {
-    let mut r = reader();
-    let mut g = Guard::default();
-    signed_in(&mut r, &mut g);
-    let again = r.tick(300);
-    assert!(
-        !again.iter().any(|a| matches!(a, Action::InSession(_))),
-        "repeated an unchanged state: {again:?}"
+fn the_shared_loop_tells_the_updater_once_per_change() {
+    // The loop that runs this box (spaces_device::Driver) asks after every
+    // step and tells the updater only when the answer changes. Driven here
+    // with the real reader, so a session that opens and stays open is one
+    // Session(true), not one per tick.
+    use spaces_device::{Driver, LinkEvent, Step};
+    let mut d = Driver::new(reader());
+    let sessions = |steps: &[Step<Action>]| {
+        steps
+            .iter()
+            .filter(|s| matches!(s, Step::Session(_)))
+            .count()
+    };
+    let opened = d.input(toolguard_core::Input::Card(ALICE.into()), 100);
+    assert!(opened.contains(&Step::Session(true)));
+    let answered = d.on(
+        LinkEvent::Message {
+            topic: topic::SCAN_RESPONSE.into(),
+            payload: yes(),
+        },
+        200,
     );
+    assert_eq!(sessions(&answered), 0, "still open: not news");
+    assert_eq!(sessions(&d.tick(300)), 0, "repeated an unchanged state");
 }
 
 #[test]

@@ -15,27 +15,30 @@
 //!
 //! ## What is reader-specific
 //!
-//! The roles it declares (`reader` alone — it has no relay), the one setting it
-//! adds (its tool), the two peripherals, and the loop at the bottom.
+//! The roles it declares, the one setting it adds (its tool), the peripherals,
+//! and [`Hardware`]: what the core's decisions are carried out on. The loop
+//! that runs the box is spaces-device-espidf's `run()`, the same one every
+//! device runs (#18).
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use esp_idf_svc::hal::gpio::{Input, InputPin, InterruptType, Output, PinDriver, Pull};
 use esp_idf_svc::hal::peripherals::Peripherals;
-use esp_idf_svc::wifi::WifiEvent;
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
+use spaces_device_espidf::run::Event;
 use spaces_device_espidf::status_light::{Status, StatusLight};
 use spaces_device_espidf::store::{key, Field, Store};
-use spaces_device_espidf::update::{self, Updates};
+use spaces_device_espidf::update::Updates;
 use spaces_device_espidf::{boot, watch_setup_button, weblog, Firmware};
 use toolguard_core::screen::Screen;
 use toolguard_core::sense::{Powered, Reading, Source};
-use toolguard_core::{Action, Health, Reader, StopButton};
+use toolguard_core::{Action, Reader, StopButton};
 
 mod board;
-mod broker;
 mod lcd;
 mod rc522;
 mod settings;
@@ -45,7 +48,7 @@ mod settings;
 /// 75 ms, which is what `nfc-522` settled on: fast enough that a tap by a
 /// person moving at human speed is never missed, slow enough that the SPI bus
 /// is mostly idle.
-const POLL: Duration = Duration::from_millis(75);
+const POLL_MS: u64 = 75;
 /// How long the stop button must stay closed before a press counts. Longer than
 /// any mechanical bounce, shorter than anyone would call a hold.
 const STOP_DEBOUNCE_MS: u64 = 50;
@@ -331,7 +334,7 @@ fn main() -> anyhow::Result<()> {
     // Only when this box is supposed to have one. A plug has no antenna and
     // failing on its absence would make the one configuration that needs no
     // reader impossible to run.
-    let mut card_reader = if settings.config.reads_cards {
+    let card_reader = if settings.config.reads_cards {
         match rc522::start(peripherals.spi2, sclk, mosi, miso, cs, rst) {
             Ok(r) => Some(r),
             Err(e) => {
@@ -372,7 +375,7 @@ fn main() -> anyhow::Result<()> {
     // Set by the interrupt when the input becomes asserted, however briefly,
     // and taken by the loop: a pulse between two passes is not missed (#9).
     let pulsed = Arc::new(AtomicBool::new(false));
-    let mut sense = if settings.source.senses() {
+    let sense = if settings.source.senses() {
         match sense_input(sense, settings.source, sense_active_low, &pulsed) {
             Ok(p) => Some(p),
             Err(e) => {
@@ -414,7 +417,7 @@ fn main() -> anyhow::Result<()> {
     // The stop button: a momentary switch to GND, so the pull-up makes an
     // unconnected or open contact read "not pressed". Debounced in the core;
     // the pin is just sampled.
-    let mut stop = if settings.stop_button {
+    let stop = if settings.stop_button {
         match PinDriver::input(stop, Pull::Up) {
             Ok(p) => Some(p),
             Err(e) => {
@@ -425,232 +428,166 @@ fn main() -> anyhow::Result<()> {
     } else {
         None
     };
-    let mut stop_button = StopButton::new(STOP_DEBOUNCE_MS);
 
-    // --- the loop -----------------------------------------------------------
-    let mut reader =
-        Reader::new(settings.config.clone()).sensing(settings.source, settings.powered);
-    let (tx, rx) = mpsc::channel::<broker::Event>();
-    // Wi-Fi after boot. `boot()` returns only once joined, but a network can
-    // go later, and the panel must then say "No Wi-Fi" rather than blame the
-    // edge. spaces-device-espidf rejoins by itself; this only listens.
-    let wifi_tx = tx.clone();
-    let _wifi_events = sysloop
-        .subscribe::<WifiEvent, _>(move |event| {
-            let up = match event {
-                WifiEvent::StaConnected(_) => true,
-                WifiEvent::StaDisconnected(_) => false,
-                _ => return,
-            };
-            let _ = wifi_tx.send(broker::Event::Wifi(up));
-        })
-        .inspect_err(|e| log::warn!("cannot watch Wi-Fi; the panel will assume it is up: {e}"));
-    // Fatal like the others, and not a `?`: returning from `main` ends the
-    // program but not the board, which would stay on the network serving
-    // updates with nothing reading cards and nothing saying why. The usual
-    // cause is a broker address the client cannot parse.
-    let client = match broker::connect(&online, tx) {
-        Ok(client) => client,
-        Err(e) => {
-            let fault = Screen::new("Broker failed", "see /log");
-            give_up(&e, &light, panel.as_mut().map(|p| (p, fault)))
-        }
-    };
-
-    let started = Instant::now();
-    let now = || started.elapsed().as_millis() as u64;
-    let address = online.address.clone();
-
-    // Resting screen before the broker answers: wifi is up by here (boot does
-    // not return until it is), so this reads "No edge" and names the half that
-    // is actually missing.
-    let mut broker_up = false;
-    let mut wifi_up = true;
-    let mut shell = Shell {
-        panel,
-        client,
+    // --- the loop: spaces-firmware's, as every device runs it (#18) ----------
+    //
+    // This box used to run its own copy of the loop, and that copy missed what
+    // the library's did besides -- holding an update during a session, the
+    // BROKER milestone, Wi-Fi state -- until each was patched back in by hand.
+    // Now the library's loop runs it: the broker, the update guard and the
+    // Wi-Fi state are handled there, once, for every device, and what is left
+    // here is the hardware.
+    let reader = Reader::new(settings.config.clone())
+        .sensing(settings.source, settings.powered)
+        .joined(online.address.clone());
+    let (sender, events) = mpsc::channel();
+    // Ahead of everything the loop does, so the resting screen says it from the
+    // first moment.
+    let _ = sender.send(Event::Input(toolguard_core::Input::Notice(
+        roles_notice.map(str::to_string),
+    )));
+    // Shared with the hardware so that a loop that cannot start can still say
+    // so on the panel, which is where a member standing there will look.
+    let panel = Rc::new(RefCell::new(panel));
+    let hardware = Hardware {
+        panel: panel.clone(),
         relay,
         strike,
-        updates: online.updates.clone(),
+        card_reader,
+        last_card_poll: None,
+        sense,
+        sense_active_low,
+        pulsed,
+        powered,
+        powered_active_low,
+        stop,
+        stop_button: StopButton::new(STOP_DEBOUNCE_MS),
     };
-    // `start` first: it puts the outputs in a known state and sends the first
-    // heartbeats -- the power report and the alive pulse -- which are what
-    // credit this device with being alive on the local broker.
-    shell.apply(reader.start(now()));
-    shell.apply(reader.notice(roles_notice, now()));
-    shell.apply(reader.health(health(&address, wifi_up, broker_up), now()));
+    // Returns only if the broker client cannot be set up -- the usual cause is
+    // an address it cannot parse -- and that is fatal like the others: not a
+    // `?`, which would end the program but not the board, leaving it on the
+    // network serving updates with nothing reading cards and nothing saying why.
+    let e = match spaces_device_espidf::run::run(&online, reader, hardware, sender, events) {
+        Err(e) => e,
+        Ok(never) => match never {},
+    };
+    let fault = Screen::new("Broker failed", "see /log");
+    let mut panel = panel.borrow_mut();
+    give_up(&e, &light, panel.as_mut().map(|p| (p, fault)))
+}
 
-    loop {
-        // One look at the antenna, which is the thing with a person waiting on
-        // it, before anything else.
-        if let Some(uid) = card_reader.as_mut().and_then(|r| r.poll()) {
-            shell.apply(reader.card(&uid, now()));
+/// The box's hardware: what the core's decisions are carried out on, and the
+/// inputs read on the loop's own thread.
+struct Hardware<'d> {
+    panel: Rc<RefCell<Option<lcd::Panel<'d>>>>,
+    relay: Option<PinDriver<'d, Output>>,
+    strike: Option<PinDriver<'d, Output>>,
+    card_reader: Option<rc522::Reader<'d>>,
+    /// When the antenna was last asked; see [`POLL_MS`].
+    last_card_poll: Option<u64>,
+    sense: Option<PinDriver<'d, Input>>,
+    sense_active_low: bool,
+    /// Set by the sense interrupt, taken here: a pulse between two passes is
+    /// not missed (#9).
+    pulsed: Arc<AtomicBool>,
+    powered: Option<PinDriver<'d, Input>>,
+    powered_active_low: bool,
+    stop: Option<PinDriver<'d, Input>>,
+    stop_button: StopButton,
+}
+
+impl spaces_device_espidf::run::Hardware<Reader> for Hardware<'_> {
+    /// Carry out what the core decided. Publishes and log lines are the loop's;
+    /// what reaches here is the panel and the outputs.
+    fn apply(&mut self, action: Action) {
+        match action {
+            Action::Show(screen) => {
+                if let Some(p) = self.panel.borrow_mut().as_mut() {
+                    if let Err(e) = p.show(&screen) {
+                        // Not fatal and not silent: the panel may recover on the
+                        // next change, and the log says that it did not now.
+                        log::warn!("panel write failed: {e:#}");
+                    }
+                }
+            }
+            Action::Set { output, on } => {
+                log::info!("{output:?} {}", if on { "ON" } else { "off" });
+                // The tool output and the strike reach hardware here.
+                // `Output::Running` is an indicator and this box has no lamp
+                // for it -- the panel is what tells a member the machine is
+                // working, and the status LED is already spoken for by the
+                // network state.
+                let (pin, what) = match output {
+                    toolguard_core::Output::Tool => (self.relay.as_mut(), "relay"),
+                    toolguard_core::Output::Strike => (self.strike.as_mut(), "strike"),
+                    toolguard_core::Output::Running => return,
+                };
+                match pin {
+                    Some(pin) => {
+                        let r = if on { pin.set_high() } else { pin.set_low() };
+                        if let Err(e) = r {
+                            // Loud: a write that failed means a machine or a
+                            // door is not where the core believes it is.
+                            log::error!("{what} write failed: {e:#}");
+                        }
+                    }
+                    // Unreachable by construction -- the core emits no Tool or
+                    // Strike action unless the box is configured with one, and
+                    // the pin is opened whenever it is. Logged rather than
+                    // ignored, because if it ever happens the thing that did
+                    // not happen is a machine switching off.
+                    None => log::error!("asked to drive the {what} with none configured"),
+                }
+            }
+            // The loop's (Effect): never routed here.
+            Action::Publish { .. } | Action::Note(_) => {}
         }
+    }
 
+    fn poll(&mut self, now: u64) -> Vec<toolguard_core::Input> {
+        let mut inputs = Vec::new();
+        // The antenna first, which is the thing with a person waiting on it.
+        if self
+            .last_card_poll
+            .is_none_or(|t| now.saturating_sub(t) >= POLL_MS)
+        {
+            self.last_card_poll = Some(now);
+            if let Some(uid) = self.card_reader.as_mut().and_then(|r| r.poll()) {
+                inputs.push(toolguard_core::Input::Card(uid));
+            }
+        }
         // Then the machine. Sampled every pass rather than on a change, which
         // the filter in the core is built for: it only moves its clock when the
         // value actually changes, so handing it every reading costs nothing and
-        // means no edge can be missed between polls.
-        if let Some(pin) = sense.as_mut() {
+        // means no edge can be missed between passes.
+        if let Some(pin) = self.sense.as_mut() {
             // The inversions, here and nowhere else: the core takes what the
             // machine is doing, and the polarity of this installation's wiring
             // is applied as the pins are read.
-            let latched = pulsed.swap(false, Ordering::AcqRel);
+            let latched = self.pulsed.swap(false, Ordering::AcqRel);
             if latched {
                 // The driver disables the interrupt each time it fires.
                 if let Err(e) = pin.enable_interrupt() {
                     log::warn!("could not re-arm the sense interrupt: {e}");
                 }
             }
-            let reading = Reading {
-                active: pin.is_low() == sense_active_low,
+            inputs.push(toolguard_core::Input::Sense(Reading {
+                active: pin.is_low() == self.sense_active_low,
                 pulsed: latched,
-                powered: powered.as_ref().map(|p| p.is_low() == powered_active_low),
-            };
-            shell.apply(reader.sense(reading, now()));
+                powered: self
+                    .powered
+                    .as_ref()
+                    .map(|p| p.is_low() == self.powered_active_low),
+            }));
         }
-
         // Then the stop button, which anyone may press. One stop per press,
         // however long the finger stays; the core turns the bounce into that.
-        if let Some(pin) = stop.as_mut() {
-            if stop_button.sample(pin.is_low(), now()) {
-                shell.apply(reader.tool_off(now()));
+        if let Some(pin) = self.stop.as_mut() {
+            if self.stop_button.sample(pin.is_low(), now) {
+                inputs.push(toolguard_core::Input::Stop);
             }
         }
-
-        while let Ok(event) = rx.try_recv() {
-            let actions = match event {
-                broker::Event::Connected => {
-                    // Every connect, not once: a clean session means the broker
-                    // has forgotten us, and a client that subscribes only at
-                    // startup is deaf after its first reconnect.
-                    broker::resubscribe(&mut shell.client);
-                    light.set(Status::Online);
-                    // What an update on probation has to get back to, or be
-                    // undone: an image that joins Wi-Fi and never reaches the
-                    // edge is not a working box.
-                    shell.updates.reach(update::BROKER);
-                    broker_up = true;
-                    reader.health(health(&address, wifi_up, broker_up), now())
-                }
-                broker::Event::Disconnected => {
-                    light.set(Status::BrokerLost);
-                    // So an update arriving now is not asked to get it back.
-                    shell.updates.lose(update::BROKER);
-                    broker_up = false;
-                    reader.health(health(&address, wifi_up, broker_up), now())
-                }
-                broker::Event::Wifi(up) => {
-                    wifi_up = up;
-                    reader.health(health(&address, wifi_up, broker_up), now())
-                }
-                broker::Event::Message { topic, payload } => {
-                    reader.message(&topic, &payload, now())
-                }
-            };
-            shell.apply(actions);
-        }
-
-        shell.apply(reader.tick(now()));
-        std::thread::sleep(POLL);
-    }
-}
-
-/// What the core's decisions are carried out on.
-struct Shell<'d> {
-    panel: Option<lcd::Panel<'d>>,
-    client: esp_idf_svc::mqtt::client::EspMqttClient<'static>,
-    relay: Option<PinDriver<'d, Output>>,
-    strike: Option<PinDriver<'d, Output>>,
-    updates: Updates,
-}
-
-impl Shell<'_> {
-    /// Carry out what the core decided.
-    fn apply(&mut self, actions: Vec<Action>) {
-        use esp_idf_svc::mqtt::client::QoS;
-        let Shell {
-            panel,
-            client,
-            relay,
-            strike,
-            updates,
-        } = self;
-        for action in actions {
-            match action {
-                Action::Publish { topic, payload } => {
-                    // `enqueue`, never `publish`: publish can block for up to ten
-                    // seconds and this is the thread that must keep polling the
-                    // antenna.
-                    if let Err(e) =
-                        client.enqueue(topic, QoS::AtLeastOnce, false, payload.as_bytes())
-                    {
-                        log::warn!("could not enqueue to {topic}: {e}");
-                    }
-                }
-                Action::Show(screen) => {
-                    if let Some(p) = panel.as_mut() {
-                        if let Err(e) = p.show(&screen) {
-                            // Not fatal and not silent: the panel may recover on the
-                            // next change, and the log says that it did not now.
-                            log::warn!("panel write failed: {e:#}");
-                        }
-                    }
-                }
-                Action::Note(note) => log::info!("{note}"),
-                // Updates wait while anything is open: a restart mid-session drops
-                // the tool, and the box comes back knowing nothing of the session.
-                Action::InSession(open) => updates.set_in_session(open),
-                Action::Set { output, on } => {
-                    log::info!("{output:?} {}", if on { "ON" } else { "off" });
-                    // The tool output and the strike reach hardware here.
-                    // `Output::Running` is an indicator and this box has no lamp
-                    // for it -- the panel is what tells a member the machine is
-                    // working, and the status LED is already spoken for by the
-                    // network state.
-                    if output == toolguard_core::Output::Strike {
-                        match strike.as_mut() {
-                            Some(pin) => {
-                                let r = if on { pin.set_high() } else { pin.set_low() };
-                                if let Err(e) = r {
-                                    // Loud, for the same reason as the relay: a
-                                    // write that failed means a door is not where
-                                    // the core believes it is.
-                                    log::error!("strike write failed: {e:#}");
-                                }
-                            }
-                            // Unreachable by construction -- the core emits no
-                            // Strike action unless `drives_latch` is set, and the
-                            // pin is opened whenever it is.
-                            None => {
-                                log::error!("asked to drive the latch with no strike configured")
-                            }
-                        }
-                    }
-                    if output == toolguard_core::Output::Tool {
-                        match relay.as_mut() {
-                            Some(pin) => {
-                                let r = if on { pin.set_high() } else { pin.set_low() };
-                                if let Err(e) = r {
-                                    // Loud: this is the output a machine's power
-                                    // depends on, and a write that failed means the
-                                    // relay is not where the core believes it is.
-                                    log::error!("relay write failed: {e:#}");
-                                }
-                            }
-                            // Unreachable by construction -- the core emits no Tool
-                            // action unless `gates_power` is set, and the relay is
-                            // opened whenever it is. Logged rather than ignored
-                            // because if it ever happens, the thing that did not
-                            // happen is a machine switching off.
-                            None => {
-                                log::error!("asked to switch the tool with no relay configured")
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        inputs
     }
 }
 
@@ -743,20 +680,5 @@ fn roles_check(store: &Store, roles: &[&str], was_registered: bool) -> Option<&'
             );
             Some("Roles changed")
         }
-    }
-}
-
-/// What the core is told about the network.
-fn health(address: &str, wifi: bool, broker: bool) -> Health {
-    Health {
-        wifi,
-        broker,
-        address: Some(address.to_string()),
-        // No SNTP yet, deliberately. The platform's tool path is measured on a
-        // monotonic timer by design and nothing in the protocol carries a
-        // usable wall clock, so a clock is an LCD nicety rather than a
-        // prerequisite — and it stays out until it can be added without ever
-        // reaching a decision.
-        clock: None,
     }
 }

@@ -24,12 +24,14 @@
 //! adds the display to whichever of those is configured.
 
 pub mod button;
+pub mod device;
 pub mod reader;
 pub mod screen;
 pub mod sense;
 pub mod settings;
 
 pub use button::StopButton;
+pub use device::Input;
 pub use reader::{Action, Reader};
 pub use screen::{Health, Screen};
 pub use settings::Settings;
