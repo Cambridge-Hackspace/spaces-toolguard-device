@@ -1,0 +1,10 @@
+# The uv environment.
+.venv/
+__pycache__/
+# Build outputs: carrier.py writes the netlist, SKiDL writes its logs and a
+# cache of the symbols used. Sources are committed; outputs are built
+# (hardware/README.md).
+*.net
+*.erc
+*.log
+*_sklib.py

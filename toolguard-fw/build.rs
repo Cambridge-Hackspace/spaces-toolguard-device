@@ -34,8 +34,9 @@ const GROUPS: [(&str, &[&str]); 3] = [
     ("powered", &["powered"]),
 ];
 
-/// The tables a board file may have besides `[pins]`.
-const TABLES: [&str; 3] = ["light", "stop", "i2c"];
+/// The tables a board file may have besides `[pins]`. `pads` (a board's own
+/// pad names for each GPIO) is for the hardware check, not the firmware.
+const TABLES: [&str; 4] = ["light", "stop", "i2c", "pads"];
 
 /// Every board there is, for `check-cfg`. A board file not listed here is
 /// refused, so a new board is added in one place on purpose.

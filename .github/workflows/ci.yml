@@ -24,6 +24,24 @@ jobs:
       - name: Tests
         run: cargo test -p toolguard-core --target x86_64-unknown-linux-gnu
 
+  # The carrier board's schematic, checked against the firmware's board file
+  # and against KiCad's footprints (hardware/carrier/check.py). KiCad 10.0.8's
+  # libraries come from KiCad's own PPA: the symbol repository keeps one file
+  # per symbol, and SKiDL reads the packaged libraries.
+  carrier:
+    name: Carrier board (schematic)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: KiCad 10's symbol and footprint libraries
+        run: |
+          sudo add-apt-repository -y ppa:kicad/kicad-10.0-releases
+          sudo apt-get install -y --no-install-recommends kicad-library-symbols kicad-library-footprints
+      - run: pipx install uv==0.13.7
+      - name: Check
+        working-directory: hardware/carrier
+        run: uv run --locked python check.py
+
   # THE RISC-V CHIPS, on upstream nightly. rust-toolchain.toml pins the date.
   #
   # All of them are built because nothing may silently hardcode the C6: the
