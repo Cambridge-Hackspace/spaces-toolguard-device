@@ -61,7 +61,13 @@ C0603 = "Capacitor_SMD:C_0603_1608Metric"
 
 def part(lib, name, tag, value=None, footprint=None, mpn=None, note=None, dnp=False):
     """A part with a FIXED tag: KiCad matches netlist parts to layout
-    footprints by it, so a random one would unlink the layout every rebuild."""
+    footprints by it, so a random one would unlink the layout every rebuild.
+
+    And an explicit footprint, always. A symbol's default is not a choice:
+    KiCad's 1N4148W defaults to a through-hole DO-41, and three SOD-123
+    diodes reached the first layout as DO-41s before this refused it.
+    """
+    assert footprint, f"{tag}: give its footprint; a symbol's default is not a choice"
     p = Part(lib, name, tag=tag)
     if value is not None:
         p.value = value
@@ -243,13 +249,14 @@ def build():
     sda, scl = nets["SDA"], nets["SCL"]
     r("R_SDA_PU", "4.7k", sda, v3)
     r("R_SCL_PU", "4.7k", scl, v3)
-    qwiic = part("Connector_Generic", "Conn_01x04", "J_QWIIC",
+    qwiic = part("Connector_Generic_MountingPin", "Conn_01x04_MountingPin", "J_QWIIC",
                  footprint="Connector_JST:JST_SH_SM04B-SRSS-TB_1x04-1MP_P1.00mm_Horizontal",
                  mpn="SM04B-SRSS-TB", note="Qwiic: GND, 3V3, SDA, SCL")
     gnd += qwiic[1]
     v3 += qwiic[2]
     sda += qwiic[3]
     scl += qwiic[4]
+    gnd += pin(qwiic, "MP")  # its two solder tabs, grounded as is usual
 
     # --- The LCD, at 5 V behind a level shifter ------------------------------
     # A PCF8574 backpack at 5 V needs ~3.5 V for a logic high, which a 3.3 V
@@ -351,12 +358,13 @@ def build():
     s_plus, s_minus, s_led = Net("SENSE_P"), Net("SENSE_N"), Net("SENSE_LED")
     s_plus += j_sense[1]
     s_minus += j_sense[2]
-    opto = part("Isolator", "LTV-817S", "U_SENSE", mpn="LTV-817S")
+    opto = part("Isolator", "LTV-817S", "U_SENSE",
+                footprint="Package_DIP:SMDIP-4_W9.53mm", mpn="LTV-817S")
     r("R_SENSE_LED", "2.2k", s_plus, s_led, footprint="Resistor_SMD:R_1206_3216Metric",
       note="2.2k for 5 V signals; 10k for 24 V")
     s_led += opto[1]
     s_minus += opto[2]
-    d_rev_sense = part("Diode", "1N4148W", "D_SENSE_REV", mpn="1N4148W")
+    d_rev_sense = part("Diode", "1N4148W", "D_SENSE_REV", footprint="Diode_SMD:D_SOD-123", mpn="1N4148W")
     s_led += pin(d_rev_sense, "K")
     s_minus += pin(d_rev_sense, "A")
     sense = nets["SENSE"]
@@ -378,10 +386,11 @@ def build():
         gate += pin(fet, "G")
         gnd += pin(fet, "S")
         coil_lo += pin(fet, "D")
-        relay = part("Relay", "G5V-1", f"K{n_out}", mpn="G5V-1-DC5")
+        relay = part("Relay", "G5V-1", f"K{n_out}",
+                     footprint="Relay_THT:Relay_SPDT_Omron_G5V-1", mpn="G5V-1-DC5")
         v5 += relay[2]
         coil_lo += relay[9]
-        fly = part("Diode", "1N4148W", f"D_K{n_out}_FLY", mpn="1N4148W")
+        fly = part("Diode", "1N4148W", f"D_K{n_out}_FLY", footprint="Diode_SMD:D_SOD-123", mpn="1N4148W")
         coil_lo += pin(fly, "A")
         v5 += pin(fly, "K")
         led_k = Net(f"K{n_out}_LED")
