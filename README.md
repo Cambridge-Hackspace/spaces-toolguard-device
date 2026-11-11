@@ -45,7 +45,7 @@ included, which goes through this firmware, a lease and a Wi-Fi link.
 
 The protocol is not redefined here. `Module`, the topics and the wire types come
 from [`spaces-firmware`][sf]'s `spaces-device`, pinned by tag in `Cargo.toml`
-(currently `v0.8.0`), so this box and every other module speak the same wire by
+(currently `v0.9.0`), so this box and every other module speak the same wire by
 construction.
 
 ## The panel is sixteen columns, and that is a design constraint
@@ -169,7 +169,7 @@ Two electrical notes worth having before wiring anything:
 ## License
 
 The firmware is [AGPL-3.0-or-later](LICENSE), matching the platform and
-`spaces-firmware`. One portion has a second copyright: `Reader::poll` in
+`spaces-firmware`. One portion has a second copyright: `poll_card` in
 `toolguard-fw/src/rc522.rs` is derived from
 [`nfc-522`](https://github.com/Cambridge-Hackspace/nfc-522) and is GPL-3.0;
 that file's header says exactly what.

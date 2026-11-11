@@ -11,7 +11,9 @@
 //! `0x20..=0x27` and a PCF8574**A**T in `0x38..=0x3F`; the parts look the same
 //! and vendors ship whichever. A hardcoded `0x27` is a reader that works on one
 //! board and is blank on the next, with nothing in the log to say why — so the
-//! scan happens at boot and the address it found is logged.
+//! scan happens at boot, through `spaces_device::i2c`, at the addresses the
+//! board file allows (`board::LCD_I2C`) or every one a backpack ships at, and
+//! the address it found is logged. The bus is shared (`crate::bus`).
 //!
 //! ## Not over-writing it
 //!
@@ -22,20 +24,20 @@
 //! same characters. The core only emits `Action::Show` when the content
 //! actually changes, and this module writes only what it is given.
 
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
 use esp_idf_svc::hal::delay::Delay;
-use esp_idf_svc::hal::gpio::{InputPin, OutputPin};
-use esp_idf_svc::hal::i2c::{I2c, I2cConfig, I2cDriver};
-use esp_idf_svc::hal::units::FromValueType as _;
 use i2c_character_display::{CharacterDisplayPCF8574T, LcdDisplayType};
+use spaces_device::i2c::{self, Found};
 use toolguard_core::Screen;
 
+use crate::bus::{self, Bus, Device};
+
 /// The panel, once something has answered on the bus.
-pub struct Panel<'d> {
-    lcd: CharacterDisplayPCF8574T<I2cDriver<'d>, Delay>,
+pub struct Panel {
+    lcd: CharacterDisplayPCF8574T<Device, Delay>,
 }
 
-impl Panel<'_> {
+impl Panel {
     /// Put a screen up. Both rows, every time.
     ///
     /// Rewriting both rows rather than diffing them: a 1602 has no way to be
@@ -60,49 +62,45 @@ impl Panel<'_> {
     }
 }
 
-/// Bring the bus up, find the backpack, and initialise the panel.
-pub fn start<'d, I2C: I2c + 'd>(
-    i2c: I2C,
-    sda: impl InputPin + OutputPin + 'd,
-    scl: impl InputPin + OutputPin + 'd,
-    addresses: &[u8],
-) -> anyhow::Result<Panel<'d>> {
-    // 100 kHz: the PCF8574 is a standard-mode part and the HD44780 behind it is
-    // slower still. Internal pull-ups on, because a cheap backpack may not
-    // populate them and a floating bus reads as "nothing is there".
-    let config = I2cConfig::new()
-        .baudrate(100_u32.kHz().into())
-        .sda_enable_pullup(true)
-        .scl_enable_pullup(true);
-    let mut driver = I2cDriver::new(i2c, sda, scl, &config).context("I2C bus for the panel")?;
+/// Find the backpack at one of `addresses` on the shared bus, and initialise
+/// the panel. Returns where it was found too, so nothing else on the bus is
+/// looked for there.
+pub fn start(bus: &'static Bus, addresses: &[u8]) -> anyhow::Result<(Panel, Found)> {
+    let mut device = bus::device(bus);
+    // A PCF8574 has no identity register, so this is "something answered
+    // where a backpack would be", and a probe that writes nothing to it.
+    let found = addresses
+        .iter()
+        .find_map(|&a| {
+            let part = if (0x38..=0x3F).contains(&a) {
+                &i2c::PCF8574A
+            } else {
+                &i2c::PCF8574
+            };
+            i2c::find(&mut device, part, Some(&[a]), &[])
+        })
+        .ok_or_else(|| {
+            anyhow!(
+                "no I2C device answered at any of {addresses:02X?}. A PCF8574T is 0x20-0x27 and \
+                 a PCF8574AT is 0x38-0x3F; check SDA/SCL are not swapped, and that the backpack \
+                 has power -- its LCD rail is usually 5V even where the bus is 3.3V"
+            )
+        })?;
+    log::info!("LCD backpack: {found}");
 
-    let found = scan(&mut driver, addresses).ok_or_else(|| {
-        anyhow!(
-            "no I2C device answered at any of {addresses:02X?}. A PCF8574T is 0x20-0x27 and a \
-             PCF8574AT is 0x38-0x3F; check SDA/SCL are not swapped, and that the backpack has \
-             power -- its LCD rail is usually 5V even where the bus is 3.3V"
-        )
-    })?;
-    log::info!("LCD backpack answered at {found:#04x}");
-
-    let mut lcd =
-        CharacterDisplayPCF8574T::new(driver, LcdDisplayType::Lcd16x2, Delay::new_default());
+    // At the address it was FOUND at. `new` would use the crate's default
+    // address whatever the scan found, and a backpack at 0x3F would be
+    // written to at 0x27.
+    let mut lcd = CharacterDisplayPCF8574T::new_with_address(
+        device,
+        found.address,
+        LcdDisplayType::Lcd16x2,
+        Delay::new_default(),
+    );
     lcd.init()
-        .map_err(|e| anyhow!("initialising the 1602 at {found:#04x}: {e:?}"))?;
+        .map_err(|e| anyhow!("initialising the 1602 at {:#04x}: {e:?}", found.address))?;
     lcd.backlight(true)
         .map_err(|e| anyhow!("backlight on: {e:?}"))?;
 
-    Ok(Panel { lcd })
-}
-
-/// The first address that acknowledges a zero-length write.
-///
-/// A bare address probe, which is what an I2C scan is: the device ACKs its
-/// address or it does not, and nothing is read or written. Harmless to try
-/// against an address with nothing on it.
-fn scan(driver: &mut I2cDriver<'_>, addresses: &[u8]) -> Option<u8> {
-    addresses
-        .iter()
-        .find(|&&addr| driver.write(addr, &[], 100).is_ok())
-        .copied()
+    Ok((Panel { lcd }, found))
 }

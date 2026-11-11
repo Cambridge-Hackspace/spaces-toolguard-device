@@ -33,17 +33,25 @@ jobs:
   # to c6 AND c5) and esp-idf-sys picks the first it supports. For the C5 the
   # triple is the C6's, so MCU is the only thing that makes this a C5 build.
   riscv:
-    name: Firmware (${{ matrix.mcu }})
+    name: Firmware (${{ matrix.board }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
+        # One entry per BOARD, so every board file keeps compiling: the C5
+        # has two, the XIAO carrier (its default) and the DevKitC-1.
         include:
           - mcu: esp32c6
+            board: c6-supermini
             target: riscv32imac-esp-espidf
           - mcu: esp32c5
+            board: c5-xiao-carrier
+            target: riscv32imac-esp-espidf
+          - mcu: esp32c5
+            board: c5-devkitc1
             target: riscv32imac-esp-espidf
           - mcu: esp32c3
+            board: c3-supermini
             target: riscv32imc-esp-espidf
     steps:
       - uses: actions/checkout@v7
@@ -61,14 +69,17 @@ jobs:
       # the C5 build passed.
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.mcu }}
+          # And by board: two C5 boards build different code from one cache.
+          key: ${{ matrix.mcu }}-${{ matrix.board }}
       - name: Lint
         env:
           MCU: ${{ matrix.mcu }}
+          BOARD: ${{ matrix.board }}
         run: cargo clippy --workspace --release --target ${{ matrix.target }} -- -D warnings
       - name: Build
         env:
           MCU: ${{ matrix.mcu }}
+          BOARD: ${{ matrix.board }}
         run: cargo build --release --target ${{ matrix.target }}
 
   # THE S3, which is Xtensa and therefore a different compiler.

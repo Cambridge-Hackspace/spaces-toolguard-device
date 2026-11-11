@@ -25,6 +25,9 @@ mfrc522 = "0.8"
 # For board::SPI_MODE. esp-idf-hal implements both embedded-hal generations and
 # mfrc522 is eh1-native, so this is the same version they already agree on.
 embedded-hal = "1"
+# One I2C bus shared by the panel, a converted reader and the joystick's
+# expander: RefCellDevice, since all of them are driven from one thread.
+embedded-hal-bus = "0.3"
 # eh1, supports the PCF8574 4-bit backpack explicitly, and has Lcd16x2 as a
 # first-class display type. NOT hd44780-driver: its published 0.4.0 is
 # embedded-hal 0.2 from 2020 and only its unpublished git master is eh1.

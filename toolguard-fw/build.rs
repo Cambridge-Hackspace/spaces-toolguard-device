@@ -17,24 +17,42 @@ use std::path::PathBuf;
 
 /// Every board has all of these, in this order: the order of the tuple
 /// `main.rs` destructures.
-const REQUIRED: [&str; 13] = [
-    "light", "setup", "sclk", "mosi", "miso", "cs", "rst", "sda", "scl", "sense", "relay", "stop",
-    "strike",
+const REQUIRED: [&str; 8] = [
+    "light", "setup", "sda", "scl", "sense", "relay", "stop", "strike",
 ];
 
-/// Roles a board may have. Each one present sets `cfg(board_has_<role>)` and
-/// gets its own `board_<role>!` macro.
-const OPTIONAL: [&str; 1] = ["powered"];
+/// Groups of pins a board may have, all of a group or none of it. Each group
+/// present sets `cfg(board_has_<group>)` and gets a `board_<group>!` macro:
+/// the pin, or a tuple of them in this order.
+///
+/// - `spi`: an RC522 on SPI. A board without it has its reader on I2C (#23).
+/// - `rst`: the RC522's reset line. A board may tie it to 3.3 V instead.
+/// - `powered`: the machine-powered input (#8).
+const GROUPS: [(&str, &[&str]); 3] = [
+    ("spi", &["sclk", "mosi", "miso", "cs"]),
+    ("rst", &["rst"]),
+    ("powered", &["powered"]),
+];
+
+/// The tables a board file may have besides `[pins]`.
+const TABLES: [&str; 3] = ["light", "stop", "i2c"];
 
 /// Every board there is, for `check-cfg`. A board file not listed here is
 /// refused, so a new board is added in one place on purpose.
-const BOARDS: [&str; 4] = ["c6-supermini", "c5-devkitc1", "c3-supermini", "s3-devkitc1"];
+const BOARDS: [&str; 5] = [
+    "c6-supermini",
+    "c5-xiao-carrier",
+    "c5-devkitc1",
+    "c3-supermini",
+    "s3-devkitc1",
+];
 
 /// The board a chip gets when `BOARD` is not set.
 fn default_board(mcu: &str) -> Option<&'static str> {
     match mcu {
         "esp32c6" => Some("c6-supermini"),
-        "esp32c5" => Some("c5-devkitc1"),
+        // The C5 is the main board, and the carrier is what it goes on (#25).
+        "esp32c5" => Some("c5-xiao-carrier"),
         "esp32c3" => Some("c3-supermini"),
         "esp32s3" => Some("s3-devkitc1"),
         _ => None,
@@ -66,8 +84,8 @@ fn main() {
     for board in BOARDS {
         println!("cargo::rustc-check-cfg=cfg(board, values(\"{board}\"))");
     }
-    for role in OPTIONAL {
-        println!("cargo::rustc-check-cfg=cfg(board_has_{role})");
+    for (group, _) in GROUPS {
+        println!("cargo::rustc-check-cfg=cfg(board_has_{group})");
     }
 
     let mcu = mcu();
@@ -122,11 +140,18 @@ fn main() {
         })
         .collect();
 
+    let optional = || GROUPS.iter().flat_map(|(_, roles)| roles.iter());
     for role in pins.keys() {
         assert!(
-            REQUIRED.contains(&role.as_str()) || OPTIONAL.contains(&role.as_str()),
+            REQUIRED.contains(&role.as_str()) || optional().any(|r| r == role),
             "{board}: `{role}` is not a role this firmware has; the roles are \
-             {REQUIRED:?} and optionally {OPTIONAL:?}"
+             {REQUIRED:?} and the groups {GROUPS:?}"
+        );
+    }
+    for key in file.keys() {
+        assert!(
+            ["board", "chip", "pins"].contains(&key.as_str()) || TABLES.contains(&key.as_str()),
+            "{board}: `{key}` is not something a board file says"
         );
     }
     let mut by_gpio: BTreeMap<u32, &str> = BTreeMap::new();
@@ -136,13 +161,15 @@ fn main() {
         }
     }
 
+    let gpio = |role: &str| format!("$p.gpio{}", pins[role]);
     let tuple: Vec<String> = REQUIRED
         .iter()
         .map(|role| {
-            let gpio = pins
-                .get(*role)
-                .unwrap_or_else(|| panic!("{board}: no pin for the required role `{role}`"));
-            format!("$p.gpio{gpio}")
+            assert!(
+                pins.contains_key(*role),
+                "{board}: no pin for the required role `{role}`"
+            );
+            gpio(role)
         })
         .collect();
 
@@ -155,19 +182,103 @@ fn main() {
         REQUIRED.join(", "),
         tuple.join(", ")
     );
-    for role in OPTIONAL {
-        if let Some(gpio) = pins.get(role) {
-            println!("cargo:rustc-cfg=board_has_{role}");
-            out.push_str(&format!(
-                "\n/// This board's `{role}` pin.\nmacro_rules! board_{role} {{\n    \
-                 ($p:ident) => {{\n        $p.gpio{gpio}\n    }};\n}}\n"
-            ));
+    for (group, roles) in GROUPS {
+        let present = roles.iter().filter(|r| pins.contains_key(**r)).count();
+        if present == 0 {
+            continue;
+        }
+        assert_eq!(
+            present,
+            roles.len(),
+            "{board}: the `{group}` pins are all or none of {roles:?}"
+        );
+        println!("cargo:rustc-cfg=board_has_{group}");
+        let value = if roles.len() == 1 {
+            gpio(roles[0])
+        } else {
+            format!(
+                "({},)",
+                roles.iter().map(|r| gpio(r)).collect::<Vec<_>>().join(", ")
+            )
+        };
+        out.push_str(&format!(
+            "\n/// This board's `{group}` pins: {}.\nmacro_rules! board_{group} {{\n    \
+             ($p:ident) => {{\n        {value}\n    }};\n}}\n",
+            roles.join(", ")
+        ));
+    }
+
+    // What the board says besides its pins, as constants for board.rs.
+    let table = |name: &str| file.get(name).and_then(|v| v.as_table());
+    let light_kind = table("light")
+        .and_then(|t| t.get("kind"))
+        .map(|v| v.as_str().expect("light.kind is a string"))
+        .unwrap_or("ws2812");
+    let light_active_low = table("light")
+        .and_then(|t| t.get("active_low"))
+        .map(|v| v.as_bool().expect("light.active_low is true or false"))
+        .unwrap_or(false);
+    let led = match light_kind {
+        "ws2812" => "Led::Ws2812".to_string(),
+        "plain" => format!("Led::Plain {{ active_low: {light_active_low} }}"),
+        other => panic!("{board}: light.kind `{other}` is not `ws2812` or `plain`"),
+    };
+    let stop_nc = table("stop")
+        .and_then(|t| t.get("normally_closed"))
+        .map(|v| v.as_bool().expect("stop.normally_closed is true or false"))
+        .unwrap_or(false);
+    let addresses = |key: &str| match table("i2c").and_then(|t| t.get(key)) {
+        None => "None".to_string(),
+        Some(v) => {
+            let addresses: Vec<String> = v
+                .as_array()
+                .unwrap_or_else(|| panic!("{board}: i2c.{key} is a list of addresses"))
+                .iter()
+                .map(|a| {
+                    let a = a.as_integer().expect("an I2C address is a number");
+                    assert!((0x08..=0x77).contains(&a), "{board}: I2C address {a:#x}");
+                    format!("{a:#04x}")
+                })
+                .collect();
+            format!("Some(&[{}])", addresses.join(", "))
+        }
+    };
+    if let Some(i2c) = table("i2c") {
+        for key in i2c.keys() {
+            assert!(
+                ["reader", "lcd"].contains(&key.as_str()),
+                "{board}: i2c.{key} is not a part a board file places"
+            );
         }
     }
+    let reader_i2c = addresses("reader");
+    let lcd_i2c = addresses("lcd");
+    let consts = format!(
+        "// Generated by build.rs from boards/{board}.toml. Edit that file, not this.\n\
+         \n\
+         /// The kind of status LED this board has.\n\
+         pub const LED: spaces_device_espidf::status_light::Led =\n    \
+         spaces_device_espidf::status_light::{led};\n\
+         \n\
+         /// Whether the stop button is wired normally closed: resting closed to\n\
+         /// ground, so pressed -- or a cut wire -- reads high on the pull-up.\n\
+         pub const STOP_NORMALLY_CLOSED: bool = {stop_nc};\n\
+         \n\
+         /// Where this board puts an RC522 on I2C, or `None` to look wherever\n\
+         /// the part can be.\n\
+         pub const READER_I2C: Option<&[u8]> = {reader_i2c};\n\
+         \n\
+         /// Where this board puts the LCD's backpack, or `None` for every\n\
+         /// address a backpack ships at ([`LCD_ADDRESSES`]).\n\
+         pub const LCD_I2C: Option<&[u8]> = {lcd_i2c};\n"
+    );
 
     println!("cargo:rustc-cfg=board=\"{board}\"");
     println!("cargo:rustc-env=TOOLGUARD_BOARD={board}");
-    let out_path = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("board_pins.rs");
-    std::fs::write(&out_path, out)
-        .unwrap_or_else(|e| panic!("cannot write {}: {e}", out_path.display()));
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    for (name, text) in [("board_pins.rs", out), ("board_consts.rs", consts)] {
+        let out_path = out_dir.join(name);
+        std::fs::write(&out_path, text)
+            .unwrap_or_else(|e| panic!("cannot write {}: {e}", out_path.display()));
+    }
 }

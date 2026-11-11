@@ -1,0 +1,57 @@
+# The ToolGuard carrier board with a Seeed XIAO ESP32-C5 socketed on it: the
+# main board (#24, #25). UNTESTED: no carrier exists yet, so this compiles and
+# nothing more.
+#
+# Pins are the XIAO's eleven edge pins only (it is socketed, so the pads
+# underneath are not reachable). From Seeed's XIAO ESP32-C5 pinout and
+# schematic rev 1.1, and the ESP32-C5 datasheet v1.5:
+#
+# - Boot mode is GPIO26/27/28, all on the XIAO itself (battery-sense switch,
+#   user LED, BOOT button) and none on an edge pin.
+# - GPIO25 and MTDI only strap the SDIO clock edge, which nothing here uses.
+# - GPIO7 straps the JTAG source, ignored with factory eFuses.
+# - GPIO11 (U0TXD) is an output after reset and the ROM prints its boot
+#   messages on it: an LED only, never a relay (#20).
+# - GPIO12 (U0RXD) is pulled up after reset: an input only.
+#
+# The single source of this board's pin map; see c6-supermini.toml.
+
+board = "c5-xiao-carrier"
+chip = "esp32c5"
+
+[pins]
+light = 11   # D6: the panel LED. The ROM's boot messages only flicker it
+setup = 28   # the XIAO's BOOT button: the hold-for-setup gesture
+sda = 23     # D4, the XIAO's own SDA: LCD, reader, joystick expander, Qwiic
+scl = 24     # D5
+sense = 1    # D0: ADC1_CH0, so an analog sense input is possible (#10)
+relay = 0    # D1: floats at reset, so the driver's gate pull-down holds it off
+strike = 25  # D2: floats at reset; its strap only sets the SDIO edge
+stop = 12    # D7: U0RXD, an input, never driven by the ROM
+# An unconverted RC522 on SPI. The carrier routes these, and a converted
+# reader on I2C (#23) leaves them free. RST is tied to 3.3 V on the carrier,
+# so there is no rst pin.
+sclk = 8     # D8
+miso = 9     # D9
+mosi = 10    # D10
+cs = 7       # D3
+
+[light]
+# A plain LED on the panel, lit when the pin is high (#16).
+kind = "plain"
+active_low = false
+
+[stop]
+# Wired normally closed: resting closed to ground, so pressing it, or a cut
+# wire, reads high on the pull-up. A broken stop circuit then stops.
+normally_closed = true
+
+[i2c]
+# A converted RC522: 0x28 is the address most converted boards report, 0x3C
+# the other one seen (the RC522 I2C bench guide). The LCD's address is never
+# probed for a reader.
+reader = [0x28, 0x3C]
+# The LCD's backpack: a PCF8574T at 0x27, or a PCF8574AT at 0x3F. Not 0x20,
+# where the joystick's expander is: a box with no LCD must not try to drive
+# the joystick as a display.
+lcd = [0x27, 0x3F]
