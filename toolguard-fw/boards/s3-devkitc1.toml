@@ -1,0 +1,24 @@
+# ESP32-S3 DevKitC-1. UNTESTED: no S3 here. Its addressable LED is on GPIO48 on
+# the boards that have one, flash and PSRAM occupy 26-32, and USB is 19/20 --
+# so this stays clear of all of them. GPIO0 is BOOT.
+#
+# The single source of this board's pin map; see c6-supermini.toml.
+
+board = "s3-devkitc1"
+chip = "esp32s3"
+
+[pins]
+light = 48
+setup = 0
+sclk = 12
+mosi = 11
+miso = 13
+cs = 10
+rst = 14
+sda = 4
+scl = 5
+sense = 15
+relay = 16
+stop = 17
+strike = 18
+powered = 21

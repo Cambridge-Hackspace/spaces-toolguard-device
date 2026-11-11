@@ -1,6 +1,6 @@
 [package]
 name = "toolguard-fw"
-description = "ToolGuard badge reader firmware for ESP32-C6, C3 and S3"
+description = "ToolGuard badge reader firmware: ESP32-C6, C5, C3 and S3 boards"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -32,6 +32,8 @@ i2c-character-display = "0.6"
 
 [build-dependencies]
 embuild.workspace = true
+# Reads boards/<BOARD>.toml. 0.8 because embuild already brings it.
+toml = "0.8"
 
 # THE CHIP cfgs ARE DECLARED, NOT SILENCED. esp-idf-sys sets `esp32c6`,
 # `esp32c5`, `esp32c3` and `esp32s3` from the MCU it was built for, and since Cargo 1.80

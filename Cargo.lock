@@ -1502,6 +1502,7 @@ dependencies = [
  "serde",
  "serde_json",
  "spaces-device",
+ "toml",
 ]
 
 [[package]]
@@ -1517,6 +1518,7 @@ dependencies = [
  "mfrc522",
  "spaces-device",
  "spaces-device-espidf",
+ "toml",
  "toolguard-core",
 ]
 

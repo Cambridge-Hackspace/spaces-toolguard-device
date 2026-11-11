@@ -325,10 +325,15 @@ Seven are always used; **sense**, **relay**, **stop**, **strike** and
 **powered** only by the modes that need them. The C3 and the C5 have no pin left for
 **powered**.
 
-<!-- PINMAP: checked against toolguard-fw/src/main.rs by
-     toolguard-core/tests/pinmap.rs. Keep the table shape if you edit it. -->
+<!-- PINMAP: checked against toolguard-fw/boards/*.toml, which the firmware's
+     pins are generated from, by toolguard-core/tests/pinmap.rs. Keep the
+     table shape if you edit it. -->
 
-| signal | esp32c6 | esp32c5 | esp32c3 | esp32s3 |
+One column per board. The firmware is built for a board by setting `BOARD`
+(and `MCU` for its chip); left unset, each chip builds its default board:
+`c6-supermini`, `c5-devkitc1`, `c3-supermini` and `s3-devkitc1`.
+
+| signal | c6-supermini | c5-devkitc1 | c3-supermini | s3-devkitc1 |
 |---|---|---|---|---|
 | light | 8 | 27 | 8 | 48 |
 | setup | 9 | 28 | 9 | 0 |

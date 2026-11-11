@@ -1,0 +1,37 @@
+# ESP32-C5 DevKitC-1. UNTESTED: no C5 here, so this compiles and nothing more
+# (#15).
+#
+# The C5's strapping pair is 27 and 28 -- "GPIO27 = 0 and GPIO28 = 0 is
+# invalid", the C6's GPIO8/GPIO9 rule under new numbers -- and on the
+# DevKitC-1 GPIO27 is the RGB LED and GPIO28 is BOOT, so they take the same two
+# roles they do on the C6. USB is 13/14, UART0 is 11/12 (and the DevKitC-1 has
+# a USB-UART bridge on those, so an output there fights the bridge), and 15-22
+# are the module's flash and PSRAM. What is left is exactly the eleven pins the
+# other roles need: 0, 1, 3, 4, 5, 6, 8, 9, 10, 23, 24.
+#
+# The single source of this board's pin map; see c6-supermini.toml.
+
+board = "c5-devkitc1"
+chip = "esp32c5"
+
+[pins]
+light = 27
+setup = 28
+sclk = 6
+mosi = 5
+miso = 4
+cs = 10
+rst = 8
+sda = 23
+scl = 24
+# GPIO1 on purpose: ADC1_CH0. The first board on which the sensed input COULD
+# be analog; it is digital today, like the others.
+sense = 1
+relay = 9
+# GPIO3 (MTDI), because the DevKit guide calls it a strapping pin and the IDF
+# GPIO page does not -- an input on a pull-up never fights a strap, so the
+# doubt lands on the input and not on an output.
+stop = 3
+strike = 0
+# No powered input: the eleven pins above are the whole budget on the
+# DevKitC-1. As on the C3, "input" falls back to seen-idle.

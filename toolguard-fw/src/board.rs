@@ -71,10 +71,13 @@
 //! twice — and that check is what caught the S3 using GPIO8 for the LED and
 //! for I2C SDA.
 //!
-//! So the assignment lives in `main.rs` as a `cfg`-gated tuple, one arm per
-//! chip, and this module holds the reasoning plus the settings that are not
-//! pins. The pin table is in this file's docs above; the compiler enforces it
-//! in `main.rs`.
+//! So each board's assignment is data, `boards/<board>.toml`, and build.rs
+//! turns it into a `board_pins!` macro that expands to concrete
+//! `pins.gpioN` values in `main.rs`: the compiler still refuses a pin used
+//! twice, and build.rs refuses it first with the board and both roles named.
+//! The board is chosen by `BOARD`, defaulting per chip. This module holds the
+//! reasoning per chip plus the settings that are not pins; the reasoning per
+//! pin is in the board files.
 
 /// SPI clock for the RC522, in Hz.
 ///
@@ -108,6 +111,10 @@ pub const LCD_ADDRESSES: &[u8] = &[0x27, 0x3F, 0x20, 0x38];
 /// A constant the driver actually passes, not a note: a `bool` saying "use mode
 /// 3" would be a second place to disagree with the code.
 pub const SPI_MODE: embedded_hal::spi::Mode = embedded_hal::spi::MODE_3;
+
+/// The board this build is for: `BOARD`, or the chip's default (build.rs). Its
+/// pin map is `boards/<BOARD>.toml`.
+pub const BOARD: &str = env!("TOOLGUARD_BOARD");
 
 /// The chip this build is for, for the boot banner and the device record.
 pub const CHIP: &str = if cfg!(esp32c6) {

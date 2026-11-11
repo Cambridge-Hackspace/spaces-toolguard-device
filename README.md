@@ -88,6 +88,20 @@ MCU=esp32c5 cargo build --release --target riscv32imac-esp-espidf
 MCU=esp32c3 cargo build --release --target riscv32imc-esp-espidf
 ```
 
+**The board is chosen by `BOARD`**, the way the chip is chosen by `MCU`. Each
+board's pin map is `toolguard-fw/boards/<board>.toml`, which the firmware's pin
+assignment is generated from; left unset, a chip builds its default board
+(`c6-supermini`, `c5-devkitc1`, `c3-supermini`, `s3-devkitc1`). A board for a
+different chip than `MCU` is refused:
+
+```sh
+BOARD=c5-devkitc1 MCU=esp32c5 cargo build --release --target riscv32imac-esp-espidf
+```
+
+Build the C5 into its own `CARGO_TARGET_DIR` if you also build the C6 in the
+same checkout: they share a target triple, and ESP-IDF's build directory
+remembers which chip it was configured for.
+
 The C5 is there for its radio: it is the only one of the four with 5 GHz Wi-Fi,
 which takes a tool box out of the 2.4 GHz band the Zigbee mesh shares (#15).
 
