@@ -52,7 +52,8 @@ for tool versions this board does not use.
 | The stop button | pluggable terminal, normally closed; RC filter and ESD | (b), (c) |
 | The sense input | pluggable terminal, LTV-817S opto, 2.2 k for a 5 V signal | (d) |
 | Two outputs | G5V-1 relays (dry contacts, 1 A at 24 V DC), AO3400A drivers with gate pull-downs, flyback diodes, an LED each, pluggable COM/NO/NC terminals | (e) |
-| The status light | a plain LED on D6 | every box |
+| The status light | a plain 3 mm through-hole LED on D6, on the front | every box |
+| Mounting | 4 M3 enclosure holes; 4 M2.5 for the LCD's standoffs; 2 M3 for the RC522 (nylon standoffs: metal detunes the antenna) | every box |
 
 The letters are the box configurations in #24. Parts marked `DNP` in the
 netlist (the 7-60 V input and buck, the SPI links) are left off by default.
@@ -73,6 +74,22 @@ netlist (the 7-60 V input and buck, the SPI links) are left off by default.
 - **The LCD needs the level shifter**: a PCF8574 at 5 V wants about 3.5 V for a
   logic high, which a 3.3 V bus does not give. With the PCA9306, the backpack's
   own pull-ups can stay.
+
+## Layout guidance
+
+- **Keep the RC522's antenna clear**: no copper, pour, tracks or metal standoffs
+  under or close to the module's antenna end, on either layer.
+- **Keep the buck converter's loop tight** (LV2862, input capacitor, catch diode,
+  inductor) in one corner over solid ground, far from the antenna and I²C.
+- **Field wiring on one edge**: the terminals, with K1, K2 and their LEDs.
+- **Power on a side edge**: USB-C, the ideal diodes and the 7-60 V terminal,
+  with the XIAO's own USB-C facing the same edge, and a route for its antenna
+  cable to a vent or plastic.
+- **SMD parts on the back** for one-sided assembly; the front carries only the
+  LCD header, the RC522 socket and the status LED. Ground on the bottom layer,
+  except under the antenna.
+- **Every hole and part comes from `carrier.py`**: a re-import deletes footprints
+  that are not in the netlist, so add mechanical parts there, not by hand.
 
 ## Not decided yet
 

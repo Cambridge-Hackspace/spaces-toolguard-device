@@ -411,14 +411,30 @@ def build():
         nc += term[3]
 
     # --- The status light: a plain LED on the panel --------------------------
-    status = part("Device", "LED", "LED_STATUS", value="red",
-                  footprint="LED_SMD:LED_0603_1608Metric", note="lit when D6 is high")
+    # Through-hole, on the FRONT, so it shows through the panel while every
+    # SMD part stays on the back for one-sided assembly. Pad 1 is K, as on
+    # the symbol.
+    status = part("Device", "LED", "LED_STATUS", value="red, 3 mm",
+                  footprint="LED_THT:LED_D3.0mm", note="front side; lit when D6 is high")
     r("R_STATUS", "1k", nets["LIGHT"], pin(status, "A"))
     gnd += pin(status, "K")
 
     # --- Mounting --------------------------------------------------------------
+    # The import deletes any footprint not in the netlist, so every hole is
+    # here; where each one goes is the layout's, measured against the real
+    # modules.
     for i in range(1, 5):
-        part("Mechanical", "MountingHole", f"H{i}", footprint="MountingHole:MountingHole_3.2mm_M3")
+        part("Mechanical", "MountingHole", f"H{i}", footprint="MountingHole:MountingHole_3.2mm_M3",
+             note="enclosure, M3")
+    # The LCD on four standoffs: a 1602's holes are usually on a 75 x 31 mm
+    # rectangle. M2.5, which also takes the modules with smaller holes.
+    for i in range(1, 5):
+        part("Mechanical", "MountingHole", f"H_LCD{i}",
+             footprint="MountingHole:MountingHole_2.7mm_M2.5", note="LCD standoff, M2.5")
+    # The RC522 module. NYLON standoffs: metal near the antenna detunes it.
+    for i in range(1, 3):
+        part("Mechanical", "MountingHole", f"H_RC{i}",
+             footprint="MountingHole:MountingHole_3.2mm_M3", note="RC522 standoff, M3, NYLON")
 
     # For check.py: the nets named for the firmware's roles, and which socket
     # pin is which of the XIAO's pads.
