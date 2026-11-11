@@ -28,6 +28,12 @@ uv run python check.py     # the checks CI runs
   diodes driving one rail, unused pins) are declared in `carrier.py`.
 
 Every part has a fixed tag, so rebuilding the netlist never unlinks the layout.
+
+**The layout** is `carrier.kicad_pcb` in this folder, done by hand in KiCad:
+*File → Import → Netlist* with `carrier.net`, after every change to
+`carrier.py`. KiCad also makes an empty `carrier.kicad_sch` with the project;
+it stays empty. The schematic is `carrier.py`, and the netlist is the only way
+the design reaches the layout.
 SKiDL prints warnings about KiCad 5-9 library paths when it is imported; they are
 for tool versions this board does not use.
 

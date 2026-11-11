@@ -8,3 +8,12 @@ __pycache__/
 *.erc
 *.log
 *_sklib.py
+# KiCad's own per-user and generated files: the layout (carrier.kicad_pcb)
+# and project (carrier.kicad_pro) are committed; these are not.
+*.kicad_prl
+*-backups/
+fp-info-cache
+*.lck
+\#auto_saved_files#
+~*.lck
+_autosave-*
