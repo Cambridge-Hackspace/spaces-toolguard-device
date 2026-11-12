@@ -1,3 +1,8 @@
 # Quarto: the rendered guide (built in CI) and its cache.
 _build/
 .quarto/
+# Built from the board by figures.py, before rendering.
+figures/
+
+/.quarto/
+**/*.quarto_ipynb
