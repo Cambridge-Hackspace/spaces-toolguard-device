@@ -53,7 +53,7 @@ for tool versions this board does not use.
 | The sense input | pluggable terminal, LTV-817S opto, 2.2 k for a 5 V signal | (d) |
 | Two outputs | G5V-1 relays (dry contacts, 1 A at 24 V DC), AO3400A drivers with gate pull-downs, flyback diodes, an LED each, pluggable COM/NO/NC terminals | (e) |
 | The status light | a plain 3 mm through-hole LED on D6, on the front | every box |
-| Mounting | 4 M3 enclosure holes; 4 M2.5 for the LCD's standoffs; 2 M3 for the RC522 (nylon standoffs: metal detunes the antenna) | every box |
+| Mounting | 4 M3 enclosure holes; 4 M2.5 for the LCD's standoffs; 4 M3 for the RC522 (nylon standoffs: metal detunes the antenna) | every box |
 
 The letters are the box configurations in #24. Parts marked `DNP` in the
 netlist (the 7-60 V input and buck, the SPI links) are left off by default.

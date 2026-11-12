@@ -431,8 +431,10 @@ def build():
     for i in range(1, 5):
         part("Mechanical", "MountingHole", f"H_LCD{i}",
              footprint="MountingHole:MountingHole_2.7mm_M2.5", note="LCD standoff, M2.5")
-    # The RC522 module. NYLON standoffs: metal near the antenna detunes it.
-    for i in range(1, 3):
+    # The RC522 module, all four of its holes: held only at the header end,
+    # a 60 mm module flexes at every tap. NYLON standoffs: metal near the
+    # antenna detunes it.
+    for i in range(1, 5):
         part("Mechanical", "MountingHole", f"H_RC{i}",
              footprint="MountingHole:MountingHole_3.2mm_M3", note="RC522 standoff, M3, NYLON")
 

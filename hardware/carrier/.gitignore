@@ -17,3 +17,4 @@ fp-info-cache
 \#auto_saved_files#
 ~*.lck
 _autosave-*
+.history/
