@@ -7069,6 +7069,17 @@
 				(justify mirror)
 			)
 		)
+		(property "MPN" "0466.500NR"
+			(at 0 0 0)
+			(layer "B.SilkS")
+			(hide yes)
+			(uuid "fb61c7b4-6767-4dec-af9c-8f5552f6797d")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(path "/9af66f2e-7174-5098-adad-b9c29693ff21")
 		(sheetname "/")
 		(attr smd)
@@ -7601,6 +7612,17 @@
 					(thickness 0.15)
 				)
 				(justify mirror)
+			)
+		)
+		(property "MPN" "SRN6045TA-220M"
+			(at 0 0 0)
+			(layer "B.SilkS")
+			(hide yes)
+			(uuid "4782ef28-8d7d-4e2c-8c2d-19f9cda1fae2")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 		(path "/aed5a749-39c6-53c9-a3c6-dd8972c7a947")
@@ -10404,6 +10426,17 @@
 				(justify mirror)
 			)
 		)
+		(property "MPN" "MF-NSMF110-2"
+			(at 0 0 0)
+			(layer "B.SilkS")
+			(hide yes)
+			(uuid "ad83dc0d-f99f-4fac-9cf2-a9e87ad91f34")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(path "/691d6b2a-cb05-5ad6-b9ef-64d0f53ed421")
 		(sheetname "/")
 		(attr smd)
@@ -10798,6 +10831,17 @@
 					(thickness 0.15)
 				)
 				(justify mirror)
+			)
+		)
+		(property "MPN" "LTST-C191KGKT"
+			(at 0 0 0)
+			(layer "B.SilkS")
+			(hide yes)
+			(uuid "7b51861c-ce83-4e17-9eb7-0cff0b42568c")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 		(path "/60ad9d80-6a36-57f7-bf5a-cb347de6ad7f")
@@ -15749,6 +15793,17 @@
 					(thickness 0.15)
 				)
 				(justify mirror)
+			)
+		)
+		(property "MPN" "LTST-C191KGKT"
+			(at 0 0 0)
+			(layer "B.SilkS")
+			(hide yes)
+			(uuid "b48db2bd-1e87-45fb-845b-f7f365b3d715")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 		(path "/d380a901-fc8b-5f95-a20b-ebda43e2098a")

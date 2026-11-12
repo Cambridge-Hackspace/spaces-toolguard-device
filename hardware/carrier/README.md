@@ -146,9 +146,9 @@ unconnected items.
 
 ## Not decided yet
 
-- **Part numbers for the fab**: `MPN` is set where the part is certain.
-  Generic resistors and capacitors go by value and package. Parts given only
-  by rating (the green LEDs, the polyfuse, the 63 V fuse, the 22 µH inductor)
-  get theirs before the first order: `fab.py` lists those still missing.
+- **Second sources**: every assembled part has an `MPN` except the generic
+  resistors and capacitors, which go by value and package. Where the fab
+  offers an equivalent it holds in stock, check it against the rating in the
+  part's value (`fab.py` lists any part that has neither).
 - **The RC522's header**: its position and pin order on the module were
   assumed, not measured (the guide's "Putting it together").

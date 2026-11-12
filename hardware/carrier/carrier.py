@@ -134,7 +134,7 @@ def build():
     usb_fused = Net("VBUS_F")
     usb_fused.drive = POWER
     f_usb = part("Device", "Polyfuse", "F_USB", value="1.1A hold, 6V+",
-                 footprint="Fuse:Fuse_1206_3216Metric")
+                 footprint="Fuse:Fuse_1206_3216Metric", mpn="MF-NSMF110-2")
     vbus += f_usb[1]
     usb_fused += f_usb[2]
     tvs_usb = part("Device", "D_TVS", "D_TVS_USB", value="5V standoff",
@@ -159,7 +159,7 @@ def build():
     vin = Net("VIN")
     vin.drive = POWER
     f_vin = part("Device", "Fuse", "F_VIN", value="500mA 63V",
-                 footprint="Fuse:Fuse_1206_3216Metric", dnp=True)
+                 footprint="Fuse:Fuse_1206_3216Metric", mpn="0466.500NR", dnp=True)
     vin_rp += f_vin[1]
     vin += f_vin[2]
     # 40 V standoff: clamps under the LV2862's 65 V transient rating, and
@@ -186,7 +186,7 @@ def build():
     v5_buck = Net("+5V2_BUCK")
     v5_buck.drive = POWER
     ind = part("Device", "L", "L_BUCK", value="22uH, Isat >= 1.6A",
-               footprint="Inductor_SMD:L_Bourns_SRN6045TA", dnp=True)
+               footprint="Inductor_SMD:L_Bourns_SRN6045TA", mpn="SRN6045TA-220M", dnp=True)
     sw += ind[1]
     v5_buck += ind[2]
     c("C_VOUT", "10uF 16V", v5_buck, gnd, footprint="Capacitor_SMD:C_0805_2012Metric", dnp=True)
@@ -395,7 +395,8 @@ def build():
         v5 += pin(fly, "K")
         led_k = Net(f"K{n_out}_LED")
         led = part("Device", "LED", f"LED_K{n_out}", value="green",
-                   footprint="LED_SMD:LED_0603_1608Metric", note="on when the coil is")
+                   footprint="LED_SMD:LED_0603_1608Metric", mpn="LTST-C191KGKT",
+                   note="on when the coil is")
         v5 += pin(led, "A")
         led_k += pin(led, "K")
         r(f"R_K{n_out}_LED", "2.2k", led_k, coil_lo)
