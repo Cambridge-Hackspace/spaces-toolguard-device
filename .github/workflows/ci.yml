@@ -36,7 +36,7 @@ jobs:
       - name: KiCad 10's symbol and footprint libraries
         run: |
           sudo add-apt-repository -y ppa:kicad/kicad-10.0-releases
-          sudo apt-get install -y --no-install-recommends kicad-library-symbols kicad-library-footprints
+          sudo apt-get install -y --no-install-recommends kicad-symbols kicad-footprints
       - run: pipx install uv==0.13.7
       - name: Check
         working-directory: hardware/carrier
