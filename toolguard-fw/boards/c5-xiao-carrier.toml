@@ -55,3 +55,19 @@ reader = [0x28, 0x3C]
 # where the joystick's expander is: a box with no LCD must not try to drive
 # the joystick as a display.
 lcd = [0x27, 0x3F]
+
+[pads]
+# The XIAO's edge pads and their GPIOs, from Seeed's XIAO ESP32-C5 pinout.
+# Not read by the firmware: hardware/carrier/check.py uses it to check that
+# every role's net on the carrier reaches the pad this file's [pins] names.
+D0 = 1
+D1 = 0
+D2 = 25
+D3 = 7
+D4 = 23
+D5 = 24
+D6 = 11
+D7 = 12
+D8 = 8
+D9 = 9
+D10 = 10

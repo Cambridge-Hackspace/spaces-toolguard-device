@@ -1,0 +1,22 @@
+# The uv environment.
+.venv/
+__pycache__/
+# Build outputs: carrier.py writes the netlist, SKiDL writes its logs and a
+# cache of the symbols used. Sources are committed; outputs are built
+# (hardware/README.md).
+*.net
+*.erc
+*.log
+*_sklib.py
+# KiCad's own per-user and generated files: the layout (carrier.kicad_pcb)
+# and project (carrier.kicad_pro) are committed; these are not.
+*.kicad_prl
+*-backups/
+fp-info-cache
+*.lck
+\#auto_saved_files#
+~*.lck
+_autosave-*
+.history/
+# fab.py's outputs: Gerbers, drill, BOM and placement, built from the board.
+fab/
