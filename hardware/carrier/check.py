@@ -12,6 +12,11 @@ footprints (#25). `uv run python check.py`; exits non-zero on any failure.
    go to the wrong legs.
 3. **ERC is clean**: no errors and no warnings. Intentional exceptions are
    declared in carrier.py, so a new warning always means something.
+4. **The layout matches the schematic.** Every part is on carrier.kicad_pcb
+   under the ID the netlist gives it, with the same footprint, reference and
+   tag, and not excluded from the BOM or placement; and the board has nothing
+   the schematic doesn't. A footprint that differs is one KiCad's "Update PCB
+   from Schematic" replaces or orphans. Read as text, so no pcbnew is needed.
 """
 
 import io
@@ -24,6 +29,7 @@ from contextlib import redirect_stderr, redirect_stdout
 HERE = os.path.dirname(os.path.abspath(__file__))
 BOARD = os.path.join(HERE, "..", "..", "toolguard-fw", "boards", "c5-xiao-carrier.toml")
 FOOTPRINTS = os.environ.get("KICAD10_FOOTPRINT_DIR", "/usr/share/kicad/footprints")
+LAYOUT = os.path.join(HERE, "carrier.kicad_pcb")
 
 failures = []
 
@@ -85,6 +91,51 @@ def pins_against_pads(circuit):
                      f"{part.footprint} has no pad {p.num} (pads: {sorted(pads)})")
 
 
+def layout_footprints():
+    """The layout's footprints, read as text (no pcbnew needed): by path, the
+    netlist ID KiCad links each to its part."""
+    with open(LAYOUT) as fh:
+        text = fh.read()
+    found = {}
+    for block in re.split(r"\n\t\(footprint ", text)[1:]:
+        prop = dict(re.findall(r'\(property "([^"]+)" "([^"]*)"', block))
+        path = re.search(r'\(path "/([^"]+)"\)', block)
+        found[path.group(1) if path else None] = {
+            "fpid": re.match(r'"([^"]+)"', block).group(1),
+            "ref": prop.get("Reference"),
+            "tag": prop.get("SKiDL Tag"),
+            "excluded": bool(re.search(r"\(attr [^)]*exclude_from_(bom|pos_files)", block)),
+        }
+    return found
+
+
+def layout_matches(circuit):
+    """Every part is on the layout as the netlist describes it, and nothing
+    else is. A footprint that differs (library, reference, tag) is one that
+    KiCad's "Update PCB from Schematic" replaces or orphans, losing its place."""
+    import uuid
+
+    from skidl.tools.kicad10.gen_netlist import namespace_uuid
+
+    layout = layout_footprints()
+    expected = set()
+    for part in circuit.parts:
+        path = str(uuid.uuid5(namespace_uuid, part.hiername))
+        expected.add(path)
+        fp = layout.get(path)
+        if fp is None:
+            fail(f"layout: {part.ref} ({part.tag}) is not on the board")
+            continue
+        for what, want in (("fpid", part.footprint), ("ref", part.ref), ("tag", part.tag)):
+            if fp[what] != want:
+                fail(f"layout: {part.ref}'s {what} is {fp[what]!r} on the board, {want!r} in the schematic")
+        if fp["excluded"]:
+            fail(f"layout: {part.ref} is excluded from the BOM or placement on the board")
+    for path, fp in layout.items():
+        if path not in expected:
+            fail(f"layout: {fp['ref']} ({fp['fpid']}) is on the board but not in the schematic")
+
+
 def main():
     with open(BOARD, "rb") as f:
         board = tomllib.load(f)
@@ -104,6 +155,7 @@ def main():
 
     pin_map(design, board)
     pins_against_pads(default_circuit)
+    layout_matches(default_circuit)
     errors, warnings = erc_logger.error.count, erc_logger.warning.count
     if errors or warnings:
         fail(f"ERC: {errors} errors and {warnings} warnings; run carrier.py to see them")
@@ -114,7 +166,8 @@ def main():
             print("  -", msg)
         sys.exit(1)
     print(f"ok: pin map matches {os.path.relpath(BOARD, HERE)}; "
-          f"{len(default_circuit.parts)} parts' pins all exist as pads; ERC clean")
+          f"{len(default_circuit.parts)} parts' pins all exist as pads; ERC clean; "
+          f"the layout has every part, as the schematic describes it")
 
 
 if __name__ == "__main__":

@@ -383,7 +383,7 @@
 		)
 		(embedded_fonts no)
 	)
-	(footprint "MountingHole_3.2mm_M3"
+	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(locked yes)
 		(layer "F.Cu")
 		(uuid "4205597f-0523-42a1-b3d0-d724fe2671ba")
@@ -423,7 +423,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Mounting Hole without connection"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -446,8 +446,40 @@
 				)
 			)
 		)
+		(property "Note" "RC522 standoff, M3, NYLON"
+			(at 0 0 0)
+			(layer "F.SilkS")
+			(hide yes)
+			(uuid "66b42918-8ce5-4bf6-a6c2-88165a88bbee")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "SKiDL Line" "carrier.py:71"
+			(at 0 0 0)
+			(layer "F.SilkS")
+			(hide yes)
+			(uuid "98b0d529-4233-4626-8464-d3ad12c8c5a9")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "SKiDL Tag" "H_RC4"
+			(at 0 0 0)
+			(layer "F.SilkS")
+			(hide yes)
+			(uuid "44284af3-447c-4c5d-a271-84f94c08ecf3")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(path "/063a1141-0ac2-5e0f-8415-531252ebb6ea")
-		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_circle
 			(center 0 0)
@@ -2467,7 +2499,7 @@
 		)
 		(embedded_fonts no)
 	)
-	(footprint "MountingHole_3.2mm_M3"
+	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(locked yes)
 		(layer "F.Cu")
 		(uuid "f734ad35-de81-4c9c-a0a1-e5d3fdf916b6")
@@ -2507,7 +2539,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Mounting Hole without connection"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -2530,8 +2562,40 @@
 				)
 			)
 		)
+		(property "Note" "RC522 standoff, M3, NYLON"
+			(at 0 0 0)
+			(layer "F.SilkS")
+			(hide yes)
+			(uuid "8c99fe0f-2406-4f81-ae1c-d70ac8f36c93")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "SKiDL Line" "carrier.py:71"
+			(at 0 0 0)
+			(layer "F.SilkS")
+			(hide yes)
+			(uuid "d1c07a0b-3511-45a7-8b2e-2fa71e1b211a")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "SKiDL Tag" "H_RC3"
+			(at 0 0 0)
+			(layer "F.SilkS")
+			(hide yes)
+			(uuid "29f6fc04-15df-4681-b47a-f9b328c6cc96")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(path "/222ea398-27bc-572f-aa53-c71ec8faa8bd")
-		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_circle
 			(center 0 0)
@@ -7077,6 +7141,7 @@
 			(effects
 				(font
 					(size 1.27 1.27)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -7622,6 +7687,7 @@
 			(effects
 				(font
 					(size 1.27 1.27)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -10434,6 +10500,7 @@
 			(effects
 				(font
 					(size 1.27 1.27)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -10841,6 +10908,7 @@
 			(effects
 				(font
 					(size 1.27 1.27)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -15803,6 +15871,7 @@
 			(effects
 				(font
 					(size 1.27 1.27)
+					(thickness 0.15)
 				)
 			)
 		)
