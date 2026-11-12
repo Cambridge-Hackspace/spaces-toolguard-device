@@ -3,6 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+    # A release: everything is checked again, and the guide's PDF is attached
+    # to the tag's GitHub release (the guide job).
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -43,22 +46,41 @@ jobs:
         run: uv run --locked python check.py
 
   # The carrier's build guide, rendered to PDF (through Typst) and HTML. Its
-  # figures are generated from the board and committed (guide/figures.py).
+  # figures are built here from the board (guide/figures.py), not committed:
+  # that needs KiCad itself, its Python module and kicad-cli, not just the
+  # libraries. The 3D renders need OpenGL, so they run under a virtual display.
+  # On a tag the PDF is attached to that tag's release, made if it isn't yet.
   guide:
     name: Carrier board (build guide)
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
+      - name: KiCad 10
+        run: |
+          sudo add-apt-repository -y ppa:kicad/kicad-10.0-releases
+          sudo apt-get install -y --no-install-recommends kicad xvfb
+      - name: Figures
+        working-directory: hardware/carrier/guide
+        run: xvfb-run -a /usr/bin/python3 figures.py
       - uses: quarto-dev/quarto-actions/setup@v2
         with:
           version: 1.11.9
       - name: Render
         working-directory: hardware/carrier/guide
-        run: quarto render
+        run: |
+          quarto render
+          cp _build/guide.pdf "_build/carrier-build-guide-${GITHUB_REF_NAME//\//-}.pdf"
       - uses: actions/upload-artifact@v4
         with:
           name: carrier-build-guide
           path: hardware/carrier/guide/_build/
+      - name: Attach the PDF to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: hardware/carrier/guide/_build/carrier-build-guide-${{ github.ref_name }}.pdf
 
   # THE RISC-V CHIPS, on upstream nightly. rust-toolchain.toml pins the date.
   #

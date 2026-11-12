@@ -4,9 +4,9 @@
 
 Writes figures/*.svg: each side of the board, parts in outline, with the
 parts a step is about filled in. They are generated rather than drawn so
-they cannot drift from the layout: re-run this whenever carrier.kicad_pcb
-changes, and commit the result with it. Also writes 3D renders of each side
-with kicad-cli.
+they cannot drift from the layout. They are build outputs, not committed
+(figures/ is git-ignored): run this before `quarto render`, as CI does. Also
+writes 3D renders of each side with kicad-cli.
 """
 
 import os

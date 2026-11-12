@@ -3,12 +3,19 @@
 One board for every ToolGuard box (#24, #25): a socketed Seeed XIAO ESP32-C5,
 the RC522 reader, the 16x2 LCD and everything around them, populated to suit
 the box. The schematic is [`carrier.py`](carrier.py) (SKiDL); the layout is
-done by hand in KiCad. **Nothing here has been built yet.**
+`carrier.kicad_pcb` (KiCad 10). **Nothing here has been built yet.**
 
 **The build guide** -- what to fit for each kind of box, the soldering order,
 the mechanical stack, wiring and bring-up -- is [`guide/`](guide/): Quarto,
-rendered to PDF (through Typst) and HTML by CI, with figures generated from
-the board by `guide/figures.py`.
+rendered to PDF (through Typst) and HTML. CI builds it on every change (the
+"Carrier board (build guide)" artifact) and attaches the PDF to each `v*`
+tag's release. To build it here, with KiCad 10 and Quarto:
+
+```sh
+cd guide && python3 figures.py && quarto render    # -> _build/guide.pdf
+```
+
+The figures are drawn from the board, so they are built, not committed.
 
 ## Building it
 
