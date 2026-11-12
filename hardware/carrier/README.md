@@ -122,10 +122,33 @@ measure square-on from the bottom-left hole to the left edge and to the bottom
 edge. The antenna is between and below the bottom pair: keep the carrier's
 copper clear of that whole area plus a few millimetres.
 
+## Ordering
+
+```sh
+python3 fab.py        # KiCad 10's pcbnew and kicad-cli; no uv environment needed
+```
+
+writes `fab/` (git-ignored: it is built from `carrier.kicad_pcb`):
+
+| File | For |
+|---|---|
+| `carrier-r1-gerbers.zip` | the bare board: Gerbers and drill files, origin at the bottom-left corner |
+| `usb/bom.csv`, `usb/cpl.csv` | assembly of every box except (d): what the fab fits, and where |
+| `vin/bom.csv`, `vin/cpl.csv` | assembly for box (d), with the 7-60 V input fitted |
+| `*/hand-solder.csv` | the through-hole parts you solder yourself |
+| `*/not-fitted.csv` | the parts that variant leaves off |
+
+The BOM uses PCBWay's columns. The fab assembles the back only (every
+surface-mount part, the USB-C included); the through-hole parts come loose and
+are soldered by hand ([the build guide](guide/guide.qmd)). Run DRC before an
+order: `kicad-cli pcb drc carrier.kicad_pcb` reports 0 violations and 0
+unconnected items.
+
 ## Not decided yet
 
-- **Part numbers for the fab**: `MPN` is set where the part is certain. LCSC
-  numbers, and parts given only by rating (the polyfuse, the 63 V fuse, the
-  22 µH inductor), are chosen with the BOM, before the first order.
-- **The board's outline, connectors' positions, the antenna clearance** for the
-  RC522 and the cable route for the XIAO's antenna: the layout's.
+- **Part numbers for the fab**: `MPN` is set where the part is certain.
+  Generic resistors and capacitors go by value and package. Parts given only
+  by rating (the green LEDs, the polyfuse, the 63 V fuse, the 22 µH inductor)
+  get theirs before the first order: `fab.py` lists those still missing.
+- **The RC522's header**: its position and pin order on the module were
+  assumed, not measured (the guide's "Putting it together").

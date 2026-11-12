@@ -18,3 +18,5 @@ fp-info-cache
 ~*.lck
 _autosave-*
 .history/
+# fab.py's outputs: Gerbers, drill, BOM and placement, built from the board.
+fab/
