@@ -3046,7 +3046,7 @@
 		(tags "SOD-123")
 		(property "Reference" "D8"
 			(at 0 2 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "7471a75d-337e-4ed1-8ba6-302811a0ffc6")
 			(effects
 				(font
@@ -3372,7 +3372,7 @@
 		(descr "Relay Omron G5V-1, see http://omronfs.omron.com/en_US/ecb/products/pdf/en-g5v_1.pdf")
 		(tags "Relay Omron G5V-1")
 		(property "Reference" "K2"
-			(at 2.5 2.2 270)
+			(at 2.4075 -6.9575 0)
 			(layer "B.SilkS")
 			(uuid "98dccddc-74b4-4f85-bbaf-881af7bff200")
 			(effects
@@ -3802,7 +3802,7 @@
 		(tags "resistor")
 		(property "Reference" "R17"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "84d51763-c3dc-4e45-87a2-528f52d7d690")
 			(effects
 				(font
@@ -4000,7 +4000,7 @@
 		(tags "resistor")
 		(property "Reference" "R29"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "68469431-75ea-4071-80b4-d564945e0c40")
 			(effects
 				(font
@@ -4184,7 +4184,7 @@
 		(tags "resistor")
 		(property "Reference" "R9"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "86a1658f-4a79-4274-918a-df5289e24d7b")
 			(effects
 				(font
@@ -4368,7 +4368,7 @@
 		(tags "resistor")
 		(property "Reference" "R11"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "ac14cfd7-97c2-4d2a-a9d0-0ce2545dbf97")
 			(effects
 				(font
@@ -4552,7 +4552,7 @@
 		(tags "SMD DIP DIL PDIP SMDIP 2.54mm 9.53mm 375mil")
 		(property "Reference" "U6"
 			(at 0 3.6 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "3cedbb9e-c0b8-4d46-a7f7-80b6dadee664")
 			(effects
 				(font
@@ -4854,7 +4854,7 @@
 		(tags "resistor")
 		(property "Reference" "R27"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "e070a395-884f-432b-af20-e57be5353ab3")
 			(effects
 				(font
@@ -5038,7 +5038,7 @@
 		(tags "Diode SMA (DO-214AC)")
 		(property "Reference" "D4"
 			(at 0 2.5 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "4a1c8bde-7aa2-4f96-bc09-70fe8f853d64")
 			(effects
 				(font
@@ -5383,7 +5383,7 @@
 		(tags "resistor")
 		(property "Reference" "R2"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "295035af-cf3b-40fb-97fa-f5f5b2ca4089")
 			(effects
 				(font
@@ -5567,7 +5567,7 @@
 		(tags "resistor")
 		(property "Reference" "R14"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "1039c227-ddd1-4d09-a90d-5cadffc4ac13")
 			(effects
 				(font
@@ -5751,7 +5751,7 @@
 		(tags "resistor")
 		(property "Reference" "R28"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "a7ff5543-2d66-4b4d-8d71-bd1a00b8816e")
 			(effects
 				(font
@@ -5934,7 +5934,7 @@
 		(descr "Relay Omron G5V-1, see http://omronfs.omron.com/en_US/ecb/products/pdf/en-g5v_1.pdf")
 		(tags "Relay Omron G5V-1")
 		(property "Reference" "K1"
-			(at 2.5 2.2 270)
+			(at 2.4075 -6.9575 0)
 			(layer "B.SilkS")
 			(uuid "f67d3941-b0df-4bc9-849b-753b407a5cc2")
 			(effects
@@ -6364,7 +6364,7 @@
 		(tags "SOT TO_SOT_SMD SC-88 SOT-363 SC-70-6 US6 UMT6 S-Mini6 TSSOP6")
 		(property "Reference" "U3"
 			(at 0 1.8 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "c4c8a71b-cd34-4c7a-8e5a-32ea8f839982")
 			(effects
 				(font
@@ -6770,7 +6770,7 @@
 		(tags "resistor")
 		(property "Reference" "R15"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "a8c40b4a-f355-43b7-8080-41d268d8cea2")
 			(effects
 				(font
@@ -6968,7 +6968,7 @@
 		(tags "fuse")
 		(property "Reference" "F2"
 			(at 0 1.83 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "4dac76cb-bf5a-4175-bade-3fd58a5f9671")
 			(effects
 				(font
@@ -7166,7 +7166,7 @@
 		(tags "Diode SMA (DO-214AC)")
 		(property "Reference" "D2"
 			(at 0 2.5 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "fd2d7d7e-069c-4a66-8e08-0eb0af878449")
 			(effects
 				(font
@@ -7511,7 +7511,7 @@
 		(tags "Semi-shielded Power Inductor")
 		(property "Reference" "L1"
 			(at 0 4.6 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "c69e87ff-d2f0-47a2-805f-700da719fc00")
 			(effects
 				(font
@@ -7796,7 +7796,7 @@
 		(tags "SOD-123")
 		(property "Reference" "D7"
 			(at 0 2 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "2166e5da-a929-4d66-a354-d0bf88723a92")
 			(effects
 				(font
@@ -8123,7 +8123,7 @@
 		(tags "capacitor")
 		(property "Reference" "C3"
 			(at 0 1.68 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "31ef5534-3c11-42f0-88b9-0bf213bf14de")
 			(effects
 				(font
@@ -8321,7 +8321,7 @@
 		(tags "capacitor")
 		(property "Reference" "C7"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "e20a17cc-79b3-4217-bc51-0487d233db73")
 			(effects
 				(font
@@ -8864,7 +8864,7 @@
 		(tags "capacitor")
 		(property "Reference" "C4"
 			(at 0 1.68 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "3a11678c-1699-4ea8-85ac-afe7ee967979")
 			(effects
 				(font
@@ -9048,7 +9048,7 @@
 		(tags "resistor")
 		(property "Reference" "R23"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "57267049-6845-4748-bab1-a416c14fb75b")
 			(effects
 				(font
@@ -9232,7 +9232,7 @@
 		(tags "resistor")
 		(property "Reference" "R21"
 			(at 0 1.83 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "e80922b4-ab99-4645-9ebb-6ef5115eb1da")
 			(effects
 				(font
@@ -9430,7 +9430,7 @@
 		(tags "resistor")
 		(property "Reference" "R18"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "e41733f8-d4c6-440c-9bce-ab1165b459cc")
 			(effects
 				(font
@@ -9628,7 +9628,7 @@
 		(tags "resistor")
 		(property "Reference" "R10"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "e91cb909-a0fd-44dd-a693-35761b2db7c9")
 			(effects
 				(font
@@ -10133,7 +10133,7 @@
 		(tags "resistor")
 		(property "Reference" "R7"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "6f0fc6ff-63d4-4a0c-ac0f-d22beff71724")
 			(effects
 				(font
@@ -10317,7 +10317,7 @@
 		(tags "fuse")
 		(property "Reference" "F1"
 			(at 0 1.83 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "db6be72d-5188-405b-9ab9-a45f7f1977b1")
 			(effects
 				(font
@@ -10501,7 +10501,7 @@
 		(tags "resistor")
 		(property "Reference" "R5"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "7048a230-d6ae-4702-a209-b63714cb737d")
 			(effects
 				(font
@@ -10699,7 +10699,7 @@
 		(tags "LED")
 		(property "Reference" "D11"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "1faeb839-150f-4e49-b9dc-fb874240fc1a")
 			(effects
 				(font
@@ -10946,7 +10946,7 @@
 		(tags "connector JST SH horizontal")
 		(property "Reference" "J5"
 			(at 0 3.98 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "bc3f6749-89e4-4970-9e0b-28a827397276")
 			(effects
 				(font
@@ -11432,7 +11432,7 @@
 		(tags "Diode SMB (DO-214AA)")
 		(property "Reference" "D3"
 			(at 0 3 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "898c089f-53e0-45f7-ba5c-9b473557d69b")
 			(effects
 				(font
@@ -11763,7 +11763,7 @@
 		(tags "resistor")
 		(property "Reference" "R6"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "294ef3da-17ee-4b07-9b11-9f1f918f9f0f")
 			(effects
 				(font
@@ -11947,7 +11947,7 @@
 		(tags "resistor")
 		(property "Reference" "R1"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "5e1858e4-3ef2-469d-9df7-53b64907aa2c")
 			(effects
 				(font
@@ -12131,7 +12131,7 @@
 		(tags "SOD-323")
 		(property "Reference" "D6"
 			(at 0 1.85 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "2b204123-2e28-4b07-a5e8-863e0e1af8a9")
 			(effects
 				(font
@@ -12448,7 +12448,7 @@
 		(tags "resistor")
 		(property "Reference" "R20"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "330ece7e-782c-4c04-b030-42dfc28ac18a")
 			(effects
 				(font
@@ -12632,7 +12632,7 @@
 		(tags "resistor")
 		(property "Reference" "R24"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "b93f06e1-d277-4160-ba09-6d7d046636f8")
 			(effects
 				(font
@@ -12816,7 +12816,7 @@
 		(tags "resistor")
 		(property "Reference" "R13"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "e0389b9f-6f1c-403c-9632-6036d371b96b")
 			(effects
 				(font
@@ -13000,7 +13000,7 @@
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "U1"
 			(at 0 2.4 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "1ab865c6-bd96-4dd7-94b5-bccc7bc7ff97")
 			(effects
 				(font
@@ -13410,7 +13410,7 @@
 		(tags "resistor")
 		(property "Reference" "R16"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "e4f361b6-9b5e-456d-8050-3dd0b2ecb27d")
 			(effects
 				(font
@@ -13607,7 +13607,7 @@
 		(descr "Generic Phoenix Contact connector footprint for: MC_1,5/2-G-3.81; number of pins: 02; pin pitch: 3.81mm; Angled || order number: 1803277 8A 160V")
 		(tags "phoenix_contact connector MC_01x02_G_3.81mm")
 		(property "Reference" "J9"
-			(at 1.9 3 180)
+			(at 1.85 -2.9325 0)
 			(layer "B.SilkS")
 			(uuid "c316bb81-492b-4b5f-897e-b8b053bf5ad3")
 			(effects
@@ -13909,7 +13909,7 @@
 		(tags "SOT TO_SOT_SMD SC-88 SOT-363 SC-70-6 US6 UMT6 S-Mini6 TSSOP6")
 		(property "Reference" "U2"
 			(at 0 1.8 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "3a22fef6-81d1-4e52-909c-994afcfa88de")
 			(effects
 				(font
@@ -14301,7 +14301,7 @@
 		(tags "resistor")
 		(property "Reference" "R22"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "3f2a0d4a-7144-4f7d-ab1c-fea981177984")
 			(effects
 				(font
@@ -14484,7 +14484,7 @@
 		(descr "Generic Phoenix Contact connector footprint for: MC_1,5/2-G-3.81; number of pins: 02; pin pitch: 3.81mm; Angled || order number: 1803277 8A 160V")
 		(tags "phoenix_contact connector MC_01x02_G_3.81mm")
 		(property "Reference" "J10"
-			(at 1.9 3 180)
+			(at 1.85 -2.9325 0)
 			(layer "B.SilkS")
 			(uuid "71eb1e0c-e5bd-4d6b-bca9-d6ec005bb65c")
 			(effects
@@ -14786,7 +14786,7 @@
 		(tags "resistor")
 		(property "Reference" "R12"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "aff4acab-35d7-4c22-8278-515ef6d3df9f")
 			(effects
 				(font
@@ -14970,7 +14970,7 @@
 		(tags "SOIC SO")
 		(property "Reference" "U5"
 			(at 0 6.1 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "9698332a-6eae-4539-8298-4b1093af8d75")
 			(effects
 				(font
@@ -15452,7 +15452,7 @@
 		(tags "resistor")
 		(property "Reference" "R4"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "4861e85b-d971-4ac1-a4d9-a599ce5855b2")
 			(effects
 				(font
@@ -15650,7 +15650,7 @@
 		(tags "LED")
 		(property "Reference" "D9"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "8d4e39d5-aa51-40a3-9c74-ee5c14be2f49")
 			(effects
 				(font
@@ -15897,7 +15897,7 @@
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "Q2"
 			(at 0 2.4 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "98aef844-7e3d-44e4-a3ab-35e6932e8449")
 			(effects
 				(font
@@ -17052,7 +17052,7 @@
 		(tags "resistor")
 		(property "Reference" "R25"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "bdd529a7-f267-4597-b7c4-b71f9504e76a")
 			(effects
 				(font
@@ -17236,7 +17236,7 @@
 		(tags "SOIC SO")
 		(property "Reference" "U4"
 			(at 0 3.4 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "855ced79-3d4f-461f-bbb8-8b42d0addbdf")
 			(effects
 				(font
@@ -17650,7 +17650,7 @@
 		(tags "SOD-123")
 		(property "Reference" "D5"
 			(at 0 2 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "ad37f82b-888f-47c3-8c26-bb8eddd2289c")
 			(effects
 				(font
@@ -17977,7 +17977,7 @@
 		(tags "Diode SMA (DO-214AC)")
 		(property "Reference" "D1"
 			(at 0 2.5 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "140b7449-3a6e-41d1-a012-976398447346")
 			(effects
 				(font
@@ -18294,7 +18294,7 @@
 		(tags "capacitor")
 		(property "Reference" "C5"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "88eb62e0-642b-46fe-a4ec-9b2bed4320cb")
 			(effects
 				(font
@@ -18478,7 +18478,7 @@
 		(tags "resistor")
 		(property "Reference" "R3"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "5e922645-cbec-483c-8d21-4191cc0e564d")
 			(effects
 				(font
@@ -18676,7 +18676,7 @@
 		(tags "capacitor")
 		(property "Reference" "C8"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "f2b11d9c-803a-4a88-a918-da1873b24175")
 			(effects
 				(font
@@ -18860,7 +18860,7 @@
 		(tags "capacitor")
 		(property "Reference" "C2"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "0dadd2d2-ba46-4b6b-94d2-23bae24b5c33")
 			(effects
 				(font
@@ -19058,7 +19058,7 @@
 		(tags "capacitor")
 		(property "Reference" "C6"
 			(at 0 1.68 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "d1b05f9b-774e-4bd1-978f-11f2fb9867d2")
 			(effects
 				(font
@@ -19242,7 +19242,7 @@
 		(tags "resistor")
 		(property "Reference" "R26"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "3deb9a6e-ed35-4fba-832c-7c7dd11e874d")
 			(effects
 				(font
@@ -19426,7 +19426,7 @@
 		(tags "capacitor")
 		(property "Reference" "C1"
 			(at 0 1.85 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "4a717c06-df9c-4415-9e1d-cbf1375ead18")
 			(effects
 				(font
@@ -20239,7 +20239,7 @@
 		(tags "resistor")
 		(property "Reference" "R19"
 			(at 0 1.43 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "8ffd86e1-8506-4dea-b18d-f7d7b86e3ecd")
 			(effects
 				(font
@@ -20423,7 +20423,7 @@
 		(tags "SOD-123")
 		(property "Reference" "D10"
 			(at 0 2 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "a3bfd2c0-a3e0-4677-adaf-31e2e2e3d24b")
 			(effects
 				(font
@@ -21109,7 +21109,7 @@
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "Q1"
 			(at 0 2.4 180)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "786fae7f-4e73-49ad-8acf-1976aee63352")
 			(effects
 				(font
@@ -21528,7 +21528,7 @@
 		(tags "resistor")
 		(property "Reference" "R8"
 			(at 0 1.43 270)
-			(layer "B.SilkS")
+			(layer "B.Fab")
 			(uuid "19426524-76c7-42d5-88eb-f566dd76d0f1")
 			(effects
 				(font
