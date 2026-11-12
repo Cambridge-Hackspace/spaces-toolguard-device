@@ -91,6 +91,32 @@ netlist (the 7-60 V input and buck, the SPI links) are left off by default.
 - **Every hole and part comes from `carrier.py`**: a re-import deletes footprints
   that are not in the netlist, so add mechanical parts there, not by hand.
 
+## The modules' hole patterns, as measured
+
+Measured with calipers on the Hackspace's own modules (2026-11), centres worked
+out from edge-to-edge gaps. Place the hole footprints from these.
+
+**LCD 1602 (QAPASS):** board 79.9 x 36.0 mm; four holes of 2.9 mm on a
+**75.0 x 30.9 mm** rectangle, about 2.5 mm in from each edge. The standard 1602
+pattern. Takes M2.5.
+
+**RFID-RC522 (blue):** board 39.4 x 60.45 mm, viewed from the front with the
+header at the top and the antenna in the lower part. Hole centres:
+
+| hole | from the left edge | from the bottom edge |
+|---|---|---|
+| top-left | 2.7 mm | 44.3 mm |
+| top-right | 36.85 mm | 44.3 mm |
+| bottom-left | 7.5 mm | 6.9 mm |
+| bottom-right | 32.4 mm | 6.9 mm |
+
+That is a 34.15 mm top pair and a 24.95 mm bottom pair, 37.4 mm apart. It
+assumes 3.2 mm holes (3.5 mm was measured, but only 3.2 makes the top row's
+widths add up) and a level bottom row. To confirm when the module is to hand,
+measure square-on from the bottom-left hole to the left edge and to the bottom
+edge. The antenna is between and below the bottom pair: keep the carrier's
+copper clear of that whole area plus a few millimetres.
+
 ## Not decided yet
 
 - **Part numbers for the fab**: `MPN` is set where the part is certain. LCSC
