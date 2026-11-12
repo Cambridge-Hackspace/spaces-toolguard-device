@@ -5,6 +5,11 @@ the RC522 reader, the 16x2 LCD and everything around them, populated to suit
 the box. The schematic is [`carrier.py`](carrier.py) (SKiDL); the layout is
 done by hand in KiCad. **Nothing here has been built yet.**
 
+**The build guide** -- what to fit for each kind of box, the soldering order,
+the mechanical stack, wiring and bring-up -- is [`guide/`](guide/): Quarto,
+rendered to PDF (through Typst) and HTML by CI, with figures generated from
+the board by `guide/figures.py`.
+
 ## Building it
 
 Needs [uv](https://docs.astral.sh/uv/) and KiCad 10's symbol and footprint

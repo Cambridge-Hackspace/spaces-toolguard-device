@@ -1,0 +1,17 @@
+project:
+  title: "ToolGuard carrier: build guide"
+  output-dir: _build
+
+format:
+  typst:
+    papersize: a4
+    margin:
+      x: 2cm
+      y: 2cm
+    toc: true
+    number-sections: true
+    fig-format: svg
+  html:
+    embed-resources: true
+    toc: true
+    number-sections: true

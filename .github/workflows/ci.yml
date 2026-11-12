@@ -42,6 +42,24 @@ jobs:
         working-directory: hardware/carrier
         run: uv run --locked python check.py
 
+  # The carrier's build guide, rendered to PDF (through Typst) and HTML. Its
+  # figures are generated from the board and committed (guide/figures.py).
+  guide:
+    name: Carrier board (build guide)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: 1.11.9
+      - name: Render
+        working-directory: hardware/carrier/guide
+        run: quarto render
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carrier-build-guide
+          path: hardware/carrier/guide/_build/
+
   # THE RISC-V CHIPS, on upstream nightly. rust-toolchain.toml pins the date.
   #
   # All of them are built because nothing may silently hardcode the C6: the
