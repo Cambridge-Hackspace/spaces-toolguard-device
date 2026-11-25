@@ -341,7 +341,9 @@ fn main() -> anyhow::Result<()> {
     // Now the library's loop runs it: the broker, the update guard and the
     // Wi-Fi state are handled there, once, for every device, and what is left
     // here is the hardware.
-    let reader = Reader::new(settings.config.clone())
+    // `online.module` signs the local wire when registration gave this box a
+    // command key, and warns that it is unsigned when it did not (CS:S #249).
+    let reader = Reader::with_module(online.module(settings.config.clone()))
         .sensing(settings.source, settings.powered)
         .joined(online.address.clone());
     let (sender, events) = mpsc::channel();

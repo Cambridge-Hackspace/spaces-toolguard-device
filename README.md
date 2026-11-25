@@ -45,8 +45,15 @@ included, which goes through this firmware, a lease and a Wi-Fi link.
 
 The protocol is not redefined here. `Module`, the topics and the wire types come
 from [`spaces-firmware`][sf]'s `spaces-device`, pinned by tag in `Cargo.toml`
-(currently `v0.9.0`), so this box and every other module speak the same wire by
+(currently `v0.10.0`), so this box and every other module speak the same wire by
 construction.
+
+**The local wire is signed.** A box that registration gave a command key seals
+every card, stop and usage report with it, and acts on no lease or answer its
+edge did not seal for it (CS:S #249; `Online::module`). A box with no key runs
+unsigned and logs a warning saying so. **Upgrade the edge first**, to CS:S
+v0.6.1 or later: an older edge does not seal, so a signing box ignores every
+answer it sends, and every card ends on "no answer".
 
 ## The panel is sixteen columns, and that is a design constraint
 

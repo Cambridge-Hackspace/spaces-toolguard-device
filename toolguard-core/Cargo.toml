@@ -15,3 +15,8 @@ serde_json.workspace = true
 [dev-dependencies]
 # The pin-map tests read toolguard-fw/boards/*.toml, as build.rs does.
 toml = "0.8"
+# Signing tests (CS:S #249) play the edge with the reference seal code, pinned
+# by the ONE CS:S tag spaces-firmware v0.10.0 also uses, so cargo builds a
+# single css_wire and the seal traits on both sides are the same traits.
+css_wire = { git = "https://github.com/Cambridge-Hackspace/cooperative-systems-spaces", tag = "v0.6.0" }
+css_wire_sign = { git = "https://github.com/Cambridge-Hackspace/cooperative-systems-spaces", tag = "v0.6.0" }

@@ -95,14 +95,23 @@ impl Reader {
     /// A reader whose usage source follows `config.senses_running`: the
     /// input's level, or nothing. See [`Reader::sensing`] for the others.
     pub fn new(config: Config) -> Self {
-        let source = if config.senses_running {
+        Reader::with_module(Module::new(config))
+    }
+
+    /// A reader around a module built elsewhere -- in practice
+    /// `Online::module`, which signs the local wire when registration gave
+    /// this box a command key (CS:S #249). The reader keeps that module as it
+    /// is: everything the box sends goes out through it, sealed, and nothing
+    /// it is sent counts unless the module believed it.
+    pub fn with_module(module: Module) -> Self {
+        let source = if module.config().senses_running {
             Source::Level
         } else {
             Source::None
         };
         Reader {
             sense: Sense::new(source, Powered::Always),
-            module: Module::new(config),
+            module,
             health: Health::default(),
             shown: None,
             showing_until: None,
